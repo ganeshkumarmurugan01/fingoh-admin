@@ -238,6 +238,43 @@ function CustomerRow({ org, onSelect, onStatusChange, onResetPassword }) {
     </div>
   );
 }
+function ActivityLog({ orgId }) {
+  const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(()=>{
+    apiCall(`/admin/customers/${orgId}/activity`)
+      .then(data=>{ setLogs(data); setLoading(false); })
+      .catch(()=>setLoading(false));
+  },[orgId]);
+
+  const ACTION_ICONS = {
+    event_created:      "📅",
+    contacts_uploaded:  "⬆",
+    meeting_sent:       "🤝",
+    crm_sync:           "🔗",
+    login:              "🔑",
+  };
+
+  if (loading) return <div style={{color:"#94A3B8",fontSize:12}}>Loading…</div>;
+  if (!logs.length) return <div style={{color:"#94A3B8",fontSize:12}}>No activity yet</div>;
+
+  return (
+    <div style={{display:"flex",flexDirection:"column",gap:0}}>
+      {logs.map((log,i)=>(
+        <div key={log.id} style={{display:"flex",gap:12,alignItems:"flex-start",padding:"10px 0",borderBottom:i<logs.length-1?`1px solid #F1F5F9`:"none"}}>
+          <div style={{width:28,height:28,borderRadius:"50%",background:"#F1F5F9",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,flexShrink:0}}>
+            {ACTION_ICONS[log.action]||"•"}
+          </div>
+          <div style={{flex:1}}>
+            <p style={{fontSize:12,fontWeight:600,color:"#1E293B",margin:0}}>{log.description}</p>
+            <p style={{fontSize:11,color:"#94A3B8",margin:"2px 0 0 0"}}>{new Date(log.created_at).toLocaleString()}</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 // ── Customer Detail View ──────────────────────────────────────────────────────
 function CustomerDetail({ orgId, onBack }) {
   const [org, setOrg]         = useState(null);
@@ -423,6 +460,11 @@ function CustomerDetail({ orgId, onBack }) {
             ))}
             </div>
         }
+        {/* Activity Log */}
+      <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:12,padding:24,marginBottom:16}}>
+        <h3 style={{fontSize:14,fontWeight:700,color:C.navy,margin:"0 0 16px 0"}}>Activity Log</h3>
+        <ActivityLog orgId={orgId}/>
+      </div>
         {/* Delete Customer */}
       <div style={{background:"#FEF2F2",border:"1px solid #FECACA",borderRadius:12,padding:24,marginTop:16}}>
         <h3 style={{fontSize:14,fontWeight:700,color:C.red,margin:"0 0 8px 0"}}>Danger Zone</h3>
