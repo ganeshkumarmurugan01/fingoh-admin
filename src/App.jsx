@@ -245,6 +245,10 @@ function CustomerDetail({ orgId, onBack }) {
   const [editing, setEditing] = useState(false);
   const [form, setForm]       = useState({});
   const [saving, setSaving]   = useState(false);
+  const [showAddUser, setShowAddUser] = useState(false);
+  const [addUserForm, setAddUserForm] = useState({name:"",email:"",role:"user",title:""});
+  const [addingUser, setAddingUser]   = useState(false);
+  const [addUserResult, setAddUserResult] = useState(null);
 
   useEffect(()=>{
     apiCall(`/admin/customers/${orgId}`).then(data=>{
@@ -351,17 +355,35 @@ function CustomerDetail({ orgId, onBack }) {
           )}
         </div>
 
-        {/* Users card */}
+             {/* Users card */}
         <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:12,padding:24}}>
-          <h3 style={{fontSize:14,fontWeight:700,color:C.navy,margin:"0 0 16px 0"}}>Users ({org.users?.length||0})</h3>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+            <h3 style={{fontSize:14,fontWeight:700,color:C.navy,margin:0}}>Users ({org.users?.length||0})</h3>
+            <button onClick={()=>setShowAddUser(true)}
+              style={{padding:"5px 12px",background:C.navy,color:C.white,border:"none",borderRadius:6,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:F}}>
+              + Add User
+            </button>
+          </div>
           {org.users?.length===0
             ? <p style={{fontSize:12,color:C.muted}}>No users yet</p>
             : org.users?.map(u=>(
-              <div key={u.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
+              <div key={u.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:`1px solid ${C.border}`}}>
                 <div>
                   <p style={{fontSize:13,fontWeight:600,color:C.navy,margin:0}}>{u.name||"—"}</p>
-                  <p style={{fontSize:11,color:C.muted,margin:0}}>{u.role} · {u.title||"—"}</p>
+                  <p style={{fontSize:11,color:C.muted,margin:0}}>{u.email||"—"}</p>
+                  <p style={{fontSize:10,color:C.muted,margin:"2px 0 0 0"}}>{u.role} · {u.title||"—"}</p>
                 </div>
+                <button
+                  onClick={async()=>{
+                    if (!window.confirm(`Reset password for ${u.name}?`)) return;
+                    try {
+                      const data = await apiCall(`/admin/customers/${orgId}/reset-password`,{method:"POST"});
+                      alert(`New password: ${data.new_password}\n\nSave this — shown once only.`);
+                    } catch(e){ alert("Failed: "+e.message); }
+                  }}
+                  style={{padding:"5px 12px",background:C.ltblue,color:C.blue,border:`1px solid #BFDBFE`,borderRadius:6,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:F}}>
+                  Reset PW
+                </button>
               </div>
             ))
           }
@@ -386,10 +408,65 @@ function CustomerDetail({ orgId, onBack }) {
                   <span style={{fontSize:12,color:C.muted}}>{ev.date_to||"—"}</span>
                   <span style={{fontSize:12,color:C.muted}}>{new Date(ev.created_at).toLocaleDateString()}</span>
                 </div>
-              ))}
+            ))}
             </div>
         }
-      </div>
+      {/* Add User Modal */}
+      {showAddUser && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <div style={{background:C.white,borderRadius:14,padding:28,maxWidth:420,width:"100%"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+              <h3 style={{fontSize:15,fontWeight:700,color:C.navy,margin:0}}>Add User</h3>
+              <button onClick={()=>{setShowAddUser(false);setAddUserResult(null);setAddUserForm({name:"",email:"",role:"user",title:""});}} style={{background:"none",border:"none",cursor:"pointer",fontSize:18,color:C.muted}}>✕</button>
+            </div>
+            {addUserResult ? (
+              <div>
+                <div style={{background:C.ltgrn,border:"1px solid #86EFAC",borderRadius:8,padding:16,marginBottom:16}}>
+                  <p style={{fontSize:12,color:"#166534",margin:"4px 0"}}><strong>Email:</strong> {addUserResult.email}</p>
+                  <p style={{fontSize:12,color:"#166534",margin:"4px 0"}}><strong>Password:</strong> <code style={{background:"#DCFCE7",padding:"2px 6px",borderRadius:4}}>{addUserResult.password}</code></p>
+                  <p style={{fontSize:11,color:C.red,margin:"8px 0 0 0",fontWeight:600}}>⚠ Save this password — shown once only</p>
+                </div>
+                <button onClick={()=>{
+                  setShowAddUser(false);setAddUserResult(null);
+                  setAddUserForm({name:"",email:"",role:"user",title:""});
+                  apiCall(`/admin/customers/${orgId}`).then(data=>setOrg(data));
+                }} style={{width:"100%",padding:"10px 0",background:C.navy,color:C.white,border:"none",borderRadius:8,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:F}}>Done</button>
+              </div>
+            ) : (
+              <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                <div><label style={lS}>Name *</label><input value={addUserForm.name} onChange={e=>setAddUserForm(p=>({...p,name:e.target.value}))} style={iS} placeholder="John Smith"/></div>
+                <div><label style={lS}>Email *</label><input value={addUserForm.email} onChange={e=>setAddUserForm(p=>({...p,email:e.target.value}))} type="email" style={iS} placeholder="john@company.com"/></div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                  <div>
+                    <label style={lS}>Role</label>
+                    <select value={addUserForm.role} onChange={e=>setAddUserForm(p=>({...p,role:e.target.value}))} style={iS}>
+                      {["admin","user","viewer"].map(r=><option key={r} value={r}>{r}</option>)}
+                    </select>
+                  </div>
+                  <div><label style={lS}>Title</label><input value={addUserForm.title} onChange={e=>setAddUserForm(p=>({...p,title:e.target.value}))} style={iS} placeholder="Sales Manager"/></div>
+                </div>
+                <div style={{display:"flex",gap:10,marginTop:8}}>
+                  <button onClick={()=>setShowAddUser(false)} style={{flex:1,padding:"10px 0",background:C.white,color:C.muted,border:`1px solid ${C.border}`,borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:F}}>Cancel</button>
+                  <button disabled={addingUser||!addUserForm.name||!addUserForm.email}
+                    onClick={async()=>{
+                      setAddingUser(true);
+                      try {
+                        const data = await apiCall(`/admin/customers/${orgId}/users`,{
+                          method:"POST", body:JSON.stringify(addUserForm)
+                        });
+                        setAddUserResult(data);
+                      } catch(e){ alert("Failed: "+e.message); }
+                      setAddingUser(false);
+                    }}
+                    style={{flex:2,padding:"10px 0",background:addingUser?"#CBD5E1":C.navy,color:C.white,border:"none",borderRadius:8,fontSize:12,fontWeight:700,cursor:addingUser?"not-allowed":"pointer",fontFamily:F}}>
+                    {addingUser?"Adding…":"Add User"}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}</div>
     </div>
   );
 }
