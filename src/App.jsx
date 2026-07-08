@@ -149,7 +149,7 @@ function CreateCustomerModal({ onClose, onCreated }) {
           <div>
             <div style={{background:C.ltgrn,border:"1px solid #86EFAC",borderRadius:10,padding:20,marginBottom:20}}>
               <p style={{fontSize:14,fontWeight:700,color:"#14532D",margin:"0 0 12px 0"}}>✓ Customer created successfully!</p>
-              <p style={{fontSize:12,color:"#166534",margin:"4px 0"}}><strong>Company:</strong> {result.email?.split("@")[1] || form.company_name}</p>
+              <p style={{fontSize:12,color:"#166534",margin:"4px 0"}}><strong>Company:</strong> {form.company_name}</p>
               <p style={{fontSize:12,color:"#166534",margin:"4px 0"}}><strong>Login Email:</strong> {result.email}</p>
               <p style={{fontSize:12,color:"#166534",margin:"4px 0"}}><strong>Password:</strong> <code style={{background:"#DCFCE7",padding:"2px 6px",borderRadius:4}}>{result.password}</code></p>
               <p style={{fontSize:11,color:"#DC2626",margin:"8px 0 0 0",fontWeight:600}}>⚠ Save this password — it won't be shown again</p>
