@@ -71,7 +71,7 @@ function LoginScreen({ onLogin }) {
     <div style={{minHeight:"100vh",background:"#0D1B3E",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:F}}>
       <div style={{background:C.white,borderRadius:16,padding:40,width:380,boxShadow:"0 24px 80px rgba(0,0,0,0.3)"}}>
         <div style={{textAlign:"center",marginBottom:32}}>
-          <div style={{fontSize:28,fontWeight:900,color:C.navy,letterSpacing:"-0.04em",marginBottom:4}}>Fingoh</div>
+          <img src="/Fingoh_Black.png" alt="Fingoh" style={{height:32,display:"block",margin:"0 auto 4px"}}/>
           <div style={{fontSize:12,color:C.muted,fontWeight:500}}>Super Admin Panel</div>
         </div>
         <form onSubmit={handleLogin}>
@@ -423,6 +423,31 @@ function CustomerDetail({ orgId, onBack }) {
             ))}
             </div>
         }
+        {/* Delete Customer */}
+      <div style={{background:"#FEF2F2",border:"1px solid #FECACA",borderRadius:12,padding:24,marginTop:16}}>
+        <h3 style={{fontSize:14,fontWeight:700,color:C.red,margin:"0 0 8px 0"}}>Danger Zone</h3>
+        <p style={{fontSize:12,color:"#991B1B",margin:"0 0 16px 0",lineHeight:1.6}}>
+          Deleting this customer will permanently remove the organisation, all users, all events, all contacts, 
+          all meeting requests, all conversation signals and all CRM connections. <strong>This action cannot be undone.</strong>
+        </p>
+        <button
+          onClick={async()=>{
+            const confirmed = window.confirm(
+              `Are you sure you want to delete "${org.name}"?\n\nThis will permanently delete:\n• All users\n• All events (${org.events?.length||0})\n• All contacts and meetings\n\nThis cannot be undone.`
+            );
+            if (!confirmed) return;
+            const doubleConfirm = window.confirm(`Type OK to confirm deletion of "${org.name}"`);
+            if (!doubleConfirm) return;
+            try {
+              await apiCall(`/admin/customers/${orgId}`, {method:"DELETE"});
+              alert(`"${org.name}" has been deleted.`);
+              onBack();
+            } catch(e) { alert("Failed: "+e.message); }
+          }}
+          style={{padding:"9px 20px",background:C.red,color:"#fff",border:"none",borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:F}}>
+          Delete Customer & All Data
+        </button>
+      </div>
       {/* Add User Modal */}
       {showAddUser && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -539,7 +564,7 @@ export default function App() {
       {/* Header */}
       <div style={{background:C.navy,padding:"0 32px",height:56,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
         <div style={{display:"flex",alignItems:"center",gap:16}}>
-          <span style={{fontSize:18,fontWeight:900,color:C.white,letterSpacing:"-0.04em"}}>Fingoh</span>
+          <img src="/Fingoh_Black.png" alt="Fingoh" style={{height:22,display:"block",filter:"brightness(0) invert(1)"}}/>
           <span style={{fontSize:11,color:"rgba(255,255,255,0.4)",fontWeight:500}}>Super Admin</span>
         </div>
         <button onClick={()=>supabase.auth.signOut()}
