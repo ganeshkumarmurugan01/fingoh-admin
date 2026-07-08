@@ -238,7 +238,161 @@ function CustomerRow({ org, onSelect, onStatusChange, onResetPassword }) {
     </div>
   );
 }
+// ── Customer Detail View ──────────────────────────────────────────────────────
+function CustomerDetail({ orgId, onBack }) {
+  const [org, setOrg]         = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState(false);
+  const [form, setForm]       = useState({});
+  const [saving, setSaving]   = useState(false);
 
+  useEffect(()=>{
+    apiCall(`/admin/customers/${orgId}`).then(data=>{
+      setOrg(data);
+      setForm({
+        plan: data.plan||"starter",
+        max_events: data.max_events||3,
+        status: data.status||"active",
+        subscription_expires_at: data.subscription_expires_at?.slice(0,10)||"",
+        admin_notes: data.admin_notes||"",
+      });
+      setLoading(false);
+    }).catch(()=>setLoading(false));
+  },[orgId]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await apiCall(`/admin/customers/${orgId}`, {
+        method:"PATCH", body:JSON.stringify(form)
+      });
+      setEditing(false);
+      const data = await apiCall(`/admin/customers/${orgId}`);
+      setOrg(data);
+    } catch(e) { alert("Failed: "+e.message); }
+    setSaving(false);
+  };
+
+  if (loading) return <div style={{padding:40,textAlign:"center",color:C.muted,fontFamily:F}}>Loading…</div>;
+  if (!org)    return <div style={{padding:40,textAlign:"center",color:C.red,fontFamily:F}}>Customer not found</div>;
+
+  const iS = {width:"100%",padding:"8px 12px",border:`1px solid ${C.border}`,borderRadius:8,fontSize:13,fontFamily:F,outline:"none",boxSizing:"border-box"};
+  const lS = {fontSize:10,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:.08,display:"block",marginBottom:5};
+  const pc = PLAN_COLORS[org.plan]||PLAN_COLORS.trial;
+  const sc = STATUS_COLORS[org.status]||STATUS_COLORS.active;
+
+  return (
+    <div style={{fontFamily:F}}>
+      {/* Back + header */}
+      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:24}}>
+        <button onClick={onBack} style={{padding:"7px 14px",background:C.white,color:C.navy,border:`1px solid ${C.border}`,borderRadius:8,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:F}}>
+          ← Back
+        </button>
+        <div>
+          <h1 style={{fontSize:20,fontWeight:700,color:C.navy,margin:0,letterSpacing:"-0.02em"}}>{org.name}</h1>
+          <p style={{fontSize:12,color:C.muted,margin:0}}>{org.slug} · Created {new Date(org.created_at).toLocaleDateString()}</p>
+        </div>
+        <div style={{marginLeft:"auto",display:"flex",gap:8,alignItems:"center"}}>
+          <span style={{fontSize:11,padding:"4px 10px",borderRadius:99,background:pc.bg,color:pc.fg,fontWeight:700}}>{org.plan}</span>
+          <span style={{fontSize:11,padding:"4px 10px",borderRadius:99,background:sc.bg,color:sc.fg,fontWeight:700}}>{org.status}</span>
+        </div>
+      </div>
+
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:16}}>
+        {/* Subscription card */}
+        <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:12,padding:24}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+            <h3 style={{fontSize:14,fontWeight:700,color:C.navy,margin:0}}>Subscription</h3>
+            {!editing
+              ? <button onClick={()=>setEditing(true)} style={{padding:"5px 12px",background:C.ltblue,color:C.blue,border:`1px solid #BFDBFE`,borderRadius:6,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:F}}>Edit</button>
+              : <div style={{display:"flex",gap:6}}>
+                  <button onClick={()=>setEditing(false)} style={{padding:"5px 12px",background:C.white,color:C.muted,border:`1px solid ${C.border}`,borderRadius:6,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:F}}>Cancel</button>
+                  <button onClick={handleSave} disabled={saving} style={{padding:"5px 12px",background:C.navy,color:C.white,border:"none",borderRadius:6,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:F}}>{saving?"Saving…":"Save"}</button>
+                </div>
+            }
+          </div>
+          {editing ? (
+            <div style={{display:"flex",flexDirection:"column",gap:12}}>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                <div>
+                  <label style={lS}>Plan</label>
+                  <select value={form.plan} onChange={e=>setForm(p=>({...p,plan:e.target.value}))} style={iS}>
+                    {["trial","starter","pro","enterprise"].map(p=><option key={p} value={p}>{p}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={lS}>Status</label>
+                  <select value={form.status} onChange={e=>setForm(p=>({...p,status:e.target.value}))} style={iS}>
+                    {["active","suspended","cancelled"].map(s=><option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                <div><label style={lS}>Max Events</label><input type="number" value={form.max_events} onChange={e=>setForm(p=>({...p,max_events:parseInt(e.target.value)}))} style={iS}/></div>
+                <div><label style={lS}>Expires</label><input type="date" value={form.subscription_expires_at} onChange={e=>setForm(p=>({...p,subscription_expires_at:e.target.value}))} style={iS}/></div>
+              </div>
+              <div><label style={lS}>Admin Notes</label><textarea value={form.admin_notes} onChange={e=>setForm(p=>({...p,admin_notes:e.target.value}))} rows={2} style={{...iS,resize:"vertical"}}/></div>
+            </div>
+          ) : (
+            <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              {[
+                ["Plan",       org.plan],
+                ["Status",     org.status],
+                ["Max Events", org.max_events],
+                ["Expires",    org.subscription_expires_at ? new Date(org.subscription_expires_at).toLocaleDateString() : "—"],
+                ["Notes",      org.admin_notes||"—"],
+              ].map(([k,v])=>(
+                <div key={k} style={{display:"flex",justifyContent:"space-between",fontSize:12}}>
+                  <span style={{color:C.muted,fontWeight:500}}>{k}</span>
+                  <span style={{color:C.dark,fontWeight:600}}>{v}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Users card */}
+        <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:12,padding:24}}>
+          <h3 style={{fontSize:14,fontWeight:700,color:C.navy,margin:"0 0 16px 0"}}>Users ({org.users?.length||0})</h3>
+          {org.users?.length===0
+            ? <p style={{fontSize:12,color:C.muted}}>No users yet</p>
+            : org.users?.map(u=>(
+              <div key={u.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
+                <div>
+                  <p style={{fontSize:13,fontWeight:600,color:C.navy,margin:0}}>{u.name||"—"}</p>
+                  <p style={{fontSize:11,color:C.muted,margin:0}}>{u.role} · {u.title||"—"}</p>
+                </div>
+              </div>
+            ))
+          }
+        </div>
+      </div>
+
+      {/* Events */}
+      <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:12,padding:24,marginBottom:16}}>
+        <h3 style={{fontSize:14,fontWeight:700,color:C.navy,margin:"0 0 16px 0"}}>Events ({org.events?.length||0})</h3>
+        {org.events?.length===0
+          ? <p style={{fontSize:12,color:C.muted}}>No events created yet</p>
+          : <div style={{display:"flex",flexDirection:"column",gap:0}}>
+              <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr 1fr",gap:12,padding:"6px 0",borderBottom:`1px solid ${C.border}`}}>
+                {["Event Name","Date From","Date To","Created"].map(h=>(
+                  <div key={h} style={{fontSize:10,fontWeight:600,color:C.muted,textTransform:"uppercase"}}>{h}</div>
+                ))}
+              </div>
+              {org.events.map(ev=>(
+                <div key={ev.id} style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr 1fr",gap:12,padding:"10px 0",borderBottom:`1px solid ${C.border}`}}>
+                  <span style={{fontSize:13,fontWeight:600,color:C.navy}}>{ev.name}</span>
+                  <span style={{fontSize:12,color:C.muted}}>{ev.date_from||"—"}</span>
+                  <span style={{fontSize:12,color:C.muted}}>{ev.date_to||"—"}</span>
+                  <span style={{fontSize:12,color:C.muted}}>{new Date(ev.created_at).toLocaleDateString()}</span>
+                </div>
+              ))}
+            </div>
+        }
+      </div>
+    </div>
+  );
+}
 // ── Main App ──────────────────────────────────────────────────────────────────
 export default function App() {
   const [user, setUser]           = useState(null);
@@ -305,7 +459,10 @@ export default function App() {
         </button>
       </div>
 
-      <div style={{padding:"28px 32px",maxWidth:1200,margin:"0 auto"}}>
+      <div style={{padding:"28px 32px",maxWidth:1200,margin:"0 auto"}}><div style={{padding:"28px 32px",maxWidth:1200,margin:"0 auto"}}>
+        {selOrg ? (
+          <CustomerDetail orgId={selOrg.id} onBack={()=>setSelOrg(null)}/>
+        ) : (
         {/* Stats */}
         {stats && (
           <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:12,marginBottom:28}}>
@@ -367,7 +524,7 @@ export default function App() {
           </div>
         )}
       </div>
-
+      )}
       {/* Modals */}
       {showCreate && (
         <CreateCustomerModal
