@@ -459,10 +459,10 @@ export default function App() {
         </button>
       </div>
 
-      <div style={{padding:"28px 32px",maxWidth:1200,margin:"0 auto"}}><div style={{padding:"28px 32px",maxWidth:1200,margin:"0 auto"}}>
+      <div style={{padding:"28px 32px",maxWidth:1200,margin:"0 auto"}}>
         {selOrg ? (
           <CustomerDetail orgId={selOrg.id} onBack={()=>setSelOrg(null)}/>
-        ) : (
+        ) : (<>
         {/* Stats */}
         {stats && (
           <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:12,marginBottom:28}}>
@@ -523,9 +523,9 @@ export default function App() {
             })}
           </div>
         )}
+        </>)}
       </div>
-      )}
-      {/* Modals */}
+       {/* Modals */}
       {showCreate && (
         <CreateCustomerModal
           onClose={()=>setShowCreate(false)}
