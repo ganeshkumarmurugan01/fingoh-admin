@@ -514,6 +514,7 @@ export default function App() {
   const [loading, setLoading]     = useState(true);
   const [stats, setStats]         = useState(null);
   const [customers, setCustomers] = useState([]);
+  const [dataLoading, setDataLoading] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [selOrg, setSelOrg]       = useState(null);
   const [pwResult, setPwResult]   = useState(null);
@@ -527,8 +528,15 @@ export default function App() {
       setUser(session?.user || null);
     });
   },[]);
+  useEffect(()=>{
+    const s = document.createElement("style");
+    s.textContent = "@keyframes spin { to { transform: rotate(360deg); } }";
+    document.head.appendChild(s);
+    return ()=>document.head.removeChild(s);
+  },[]);
 
   const loadData = async () => {
+    setDataLoading(true);
     try {
       const [s, c] = await Promise.all([
         apiCall("/admin/stats"),
@@ -539,6 +547,7 @@ export default function App() {
     } catch(e) {
       console.error("Load failed:", e);
     }
+    setDataLoading(false);
   };
 
   useEffect(()=>{ if(user) loadData(); },[user]);
@@ -613,7 +622,12 @@ export default function App() {
               <div key={h} style={{fontSize:10,fontWeight:600,color:C.muted,textAlign:["Events"].includes(h)?"center":"left"}}>{h}</div>
             ))}
           </div>
-          {customers.length===0 ? (
+          {dataLoading ? (
+            <div style={{padding:40,textAlign:"center",color:C.muted,fontSize:13}}>
+              <div style={{width:24,height:24,border:`2px solid #E2E8F0`,borderTop:`2px solid ${C.navy}`,borderRadius:"50%",animation:"spin .8s linear infinite",margin:"0 auto 12px"}}/>
+              Loading customers…
+            </div>
+          ) : customers.length===0 ? (
             <div style={{padding:40,textAlign:"center",color:C.muted,fontSize:13}}>No customers yet — create your first one</div>
           ) : customers.map(org=>(
             <CustomerRow key={org.id} org={org}
