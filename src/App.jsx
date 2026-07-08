@@ -204,7 +204,7 @@ function CustomerRow({ org, onSelect, onStatusChange, onResetPassword }) {
     : "—";
 
   return (
-    <div style={{padding:"14px 20px",borderBottom:`1px solid ${C.border}`,display:"grid",gridTemplateColumns:"2fr 1fr 80px 80px 100px 80px 120px",gap:12,alignItems:"center",background:C.white,cursor:"pointer"}}
+    <div style={{padding:"14px 20px",borderBottom:`1px solid ${C.border}`,display:"grid",gridTemplateColumns:"2fr 1fr 80px 80px 100px 60px 160px",gap:12,alignItems:"center",background:C.white,cursor:"pointer"}}
       onClick={()=>onSelect(org)}>
       <div>
         <p style={{fontSize:13,fontWeight:600,color:C.navy,margin:0}}>{org.name}</p>
@@ -442,6 +442,7 @@ function CustomerDetail({ orgId, onBack }) {
               await apiCall(`/admin/customers/${orgId}`, {method:"DELETE"});
               alert(`"${org.name}" has been deleted.`);
               onBack();
+              window.location.reload();
             } catch(e) { alert("Failed: "+e.message); }
           }}
           style={{padding:"9px 20px",background:C.red,color:"#fff",border:"none",borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:F}}>
@@ -607,7 +608,7 @@ export default function App() {
             </div>
           </div>
           {/* Table header */}
-          <div style={{padding:"8px 20px",display:"grid",gridTemplateColumns:"2fr 1fr 80px 80px 100px 80px 120px",gap:12,background:"#F8FAFC",borderBottom:`1px solid ${C.border}`}}>
+          <div style={{padding:"8px 20px",display:"grid",gridTemplateColumns:"2fr 1fr 80px 80px 100px 60px 160px",gap:12,background:"#F8FAFC",borderBottom:`1px solid ${C.border}`}}>
             {["Company","Admin","Plan","Status","Expires","Events","Actions"].map(h=>(
               <div key={h} style={{fontSize:10,fontWeight:600,color:C.muted,textAlign:["Events"].includes(h)?"center":"left"}}>{h}</div>
             ))}
