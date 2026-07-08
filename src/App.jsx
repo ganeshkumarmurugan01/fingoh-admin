@@ -384,6 +384,18 @@ function CustomerDetail({ orgId, onBack }) {
                   style={{padding:"5px 12px",background:C.ltblue,color:C.blue,border:`1px solid #BFDBFE`,borderRadius:6,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:F}}>
                   Reset PW
                 </button>
+                <button
+                  onClick={async()=>{
+                    if (!window.confirm(`Delete user ${u.name}? This cannot be undone.`)) return;
+                    try {
+                      await apiCall(`/admin/customers/${orgId}/users/${u.id}`,{method:"DELETE"});
+                      const data = await apiCall(`/admin/customers/${orgId}`);
+                      setOrg(data);
+                    } catch(e){ alert("Failed: "+e.message); }
+                  }}
+                  style={{padding:"5px 12px",background:"#FEF2F2",color:C.red,border:"1px solid #FECACA",borderRadius:6,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:F}}>
+                  Delete
+                </button>
               </div>
             ))
           }
