@@ -10,8 +10,27 @@ const C   = {
   ltred:"#FEF2F2", ltamber:"#FFFBEB",
 };
 
+const PLANS = [
+  { id:"trial",             label:"Trial",              max_events:1,   description:"1 event, no commitment" },
+  { id:"single_event",      label:"Single Event",       max_events:1,   description:"1 event, pay per show" },
+  { id:"event_bundle",      label:"Event Bundle",       max_events:6,   description:"3–6 events, discounted rate" },
+  { id:"event_portfolio",   label:"Event Portfolio",    max_events:15,  description:"7–15 events, best rate" },
+  { id:"annual_self_serve", label:"Annual · Self-serve",max_events:999, description:"5+ shows/year, monthly or annual billing" },
+  { id:"annual_enterprise", label:"Annual · Enterprise",max_events:999, description:"Unlimited events, dedicated support" },
+  // legacy — kept for existing customers
+  { id:"starter",           label:"Starter (legacy)",   max_events:3,   description:"Legacy plan" },
+  { id:"pro",               label:"Pro (legacy)",        max_events:10,  description:"Legacy plan" },
+  { id:"enterprise",        label:"Enterprise (legacy)", max_events:999, description:"Legacy plan" },
+];
+
 const PLAN_COLORS = {
-  trial:      {bg:"#F1F5F9", fg:"#475569"},
+  trial:              {bg:"#F1F5F9", fg:"#475569"},
+  single_event:       {bg:"#EFF6FF", fg:"#1E3A8A"},
+  event_bundle:       {bg:"#ECFDF5", fg:"#065F46"},
+  event_portfolio:    {bg:"#F0FDF4", fg:"#14532D"},
+  annual_self_serve:  {bg:"#FDF4FF", fg:"#6B21A8"},
+  annual_enterprise:  {bg:"#FFF7ED", fg:"#9A3412"},
+  // legacy
   starter:    {bg:"#EFF6FF", fg:"#1E3A8A"},
   pro:        {bg:"#F0FDF4", fg:"#14532D"},
   enterprise: {bg:"#FDF4FF", fg:"#581C87"},
@@ -110,8 +129,13 @@ function StatCard({ val, label, color }) {
 function CreateCustomerModal({ onClose, onCreated }) {
   const [form, setForm] = useState({
     company_name:"", slug:"", admin_email:"", admin_name:"",
-    plan:"starter", max_events:3, admin_notes:"", subscription_expires_at:""
+    plan:"single_event", max_events:1, admin_notes:"", subscription_expires_at:""
   });
+
+  const handlePlanChange = (plan) => {
+    const p = PLANS.find(x => x.id === plan);
+    setForm(f => ({...f, plan, max_events: p ? p.max_events : f.max_events}));
+  };
   const [loading, setLoading] = useState(false);
   const [result, setResult]   = useState(null);
   const [error, setError]     = useState("");
@@ -171,9 +195,10 @@ function CreateCustomerModal({ onClose, onCreated }) {
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
               <div>
                 <label style={lS}>Plan</label>
-                <select value={form.plan} onChange={e=>setForm(p=>({...p,plan:e.target.value}))} style={iS}>
-                  {["trial","starter","pro","enterprise"].map(p=><option key={p} value={p}>{p}</option>)}
+                <select value={form.plan} onChange={e=>handlePlanChange(e.target.value)} style={iS}>
+                  {PLANS.map(p=><option key={p.id} value={p.id}>{p.label}</option>)}
                 </select>
+                <p style={{fontSize:10,color:C.muted,margin:"4px 0 0"}}>{PLANS.find(p=>p.id===form.plan)?.description}</p>
               </div>
               <div><label style={lS}>Max Events</label><input value={form.max_events} onChange={e=>setForm(p=>({...p,max_events:e.target.value}))} type="number" min="1" style={iS}/></div>
               <div><label style={lS}>Expires</label><input value={form.subscription_expires_at} onChange={e=>setForm(p=>({...p,subscription_expires_at:e.target.value}))} type="date" style={iS}/></div>
@@ -357,9 +382,13 @@ function CustomerDetail({ orgId, onBack }) {
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
                 <div>
                   <label style={lS}>Plan</label>
-                  <select value={form.plan} onChange={e=>setForm(p=>({...p,plan:e.target.value}))} style={iS}>
-                    {["trial","starter","pro","enterprise"].map(p=><option key={p} value={p}>{p}</option>)}
+                  <select value={form.plan} onChange={e=>{
+                    const p = PLANS.find(x=>x.id===e.target.value);
+                    setForm(f=>({...f, plan:e.target.value, max_events: p ? p.max_events : f.max_events}));
+                  }} style={iS}>
+                    {PLANS.map(p=><option key={p.id} value={p.id}>{p.label}</option>)}
                   </select>
+                  <p style={{fontSize:10,color:C.muted,margin:"4px 0 0"}}>{PLANS.find(p=>p.id===form.plan)?.description}</p>
                 </div>
                 <div>
                   <label style={lS}>Status</label>
@@ -682,13 +711,17 @@ export default function App() {
 
         {/* Plan breakdown */}
         {stats && (
-          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginTop:16}}>
-            {Object.entries(stats.plans).map(([plan,count])=>{
-              const pc = PLAN_COLORS[plan]||PLAN_COLORS.trial;
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginTop:16}}>
+            {PLANS.filter(p=>!p.id.includes("legacy") && (stats.plans[p.id]||0) > 0 || ["single_event","event_bundle","annual_self_serve"].includes(p.id)).map(p=>{
+              const count = stats.plans[p.id]||0;
+              const pc = PLAN_COLORS[p.id]||PLAN_COLORS.trial;
               return (
-                <div key={plan} style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:10,padding:"14px 18px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                  <span style={{fontSize:12,color:C.dark,textTransform:"capitalize",fontWeight:500}}>{plan}</span>
-                  <span style={{fontSize:14,fontWeight:700,padding:"3px 10px",borderRadius:99,background:pc.bg,color:pc.fg}}>{count}</span>
+                <div key={p.id} style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:10,padding:"14px 18px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div>
+                    <p style={{fontSize:12,color:C.dark,fontWeight:600,margin:0}}>{p.label}</p>
+                    <p style={{fontSize:10,color:C.muted,margin:0}}>{p.description}</p>
+                  </div>
+                  <span style={{fontSize:16,fontWeight:700,padding:"4px 12px",borderRadius:99,background:pc.bg,color:pc.fg,flexShrink:0,marginLeft:8}}>{count}</span>
                 </div>
               );
             })}
