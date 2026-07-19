@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "./lib/supabase.js";
 
 const API = import.meta.env.VITE_API_URL;
@@ -7,40 +7,27 @@ const C   = {
   navy:"#0D1B3E", blue:"#2563EB", green:"#16A34A", red:"#DC2626",
   amber:"#D97706", white:"#FFFFFF", light:"#F8FAFC", muted:"#94A3B8",
   dark:"#1E293B", border:"#E2E8F0", ltblue:"#EFF6FF", ltgrn:"#F0FDF4",
-  ltred:"#FEF2F2", ltamber:"#FFFBEB",
+  ltred:"#FEF2F2", ltamber:"#FFFBEB", purple:"#7C3AED", ltpur:"#F5F3FF",
 };
 
-const PLANS = [
-  { id:"trial",             label:"Trial",              max_events:1,   description:"1 event, no commitment" },
-  { id:"single_event",      label:"Single Event",       max_events:1,   description:"1 event, pay per show" },
-  { id:"event_bundle",      label:"Event Bundle",       max_events:6,   description:"3–6 events, discounted rate" },
-  { id:"event_portfolio",   label:"Event Portfolio",    max_events:15,  description:"7–15 events, best rate" },
-  { id:"annual_self_serve", label:"Annual · Self-serve",max_events:999, description:"5+ shows/year, monthly or annual billing" },
-  { id:"annual_enterprise", label:"Annual · Enterprise",max_events:999, description:"Unlimited events, dedicated support" },
-  // legacy — kept for existing customers
-  { id:"starter",           label:"Starter (legacy)",   max_events:3,   description:"Legacy plan" },
-  { id:"pro",               label:"Pro (legacy)",        max_events:10,  description:"Legacy plan" },
-  { id:"enterprise",        label:"Enterprise (legacy)", max_events:999, description:"Legacy plan" },
-];
-
+// ── Plan meta ─────────────────────────────────────────────────────────────────
 const PLAN_COLORS = {
   trial:              {bg:"#F1F5F9", fg:"#475569"},
   single_event:       {bg:"#EFF6FF", fg:"#1E3A8A"},
   event_bundle:       {bg:"#ECFDF5", fg:"#065F46"},
   event_portfolio:    {bg:"#F0FDF4", fg:"#14532D"},
-  annual_self_serve:  {bg:"#FDF4FF", fg:"#6B21A8"},
+  annual_self_serve:  {bg:"#F5F3FF", fg:"#5B21B6"},
   annual_enterprise:  {bg:"#FFF7ED", fg:"#9A3412"},
-  // legacy
   starter:    {bg:"#EFF6FF", fg:"#1E3A8A"},
   pro:        {bg:"#F0FDF4", fg:"#14532D"},
-  enterprise: {bg:"#FDF4FF", fg:"#581C87"},
+  enterprise: {bg:"#F5F3FF", fg:"#581C87"},
 };
-
 const STATUS_COLORS = {
   active:    {bg:"#F0FDF4", fg:"#16A34A"},
   suspended: {bg:"#FEF3C7", fg:"#92400E"},
   cancelled: {bg:"#FEF2F2", fg:"#DC2626"},
 };
+const SUPPORT_LABELS = { email:"Email", priority:"Priority", dedicated:"Dedicated CSM" };
 
 // ── Auth helper ───────────────────────────────────────────────────────────────
 async function apiCall(path, options = {}) {
@@ -58,36 +45,35 @@ async function apiCall(path, options = {}) {
   return r.json();
 }
 
-// ── Login Screen ──────────────────────────────────────────────────────────────
+// ── Reusable field styles ─────────────────────────────────────────────────────
+const iS = {width:"100%",padding:"9px 12px",border:`1px solid ${C.border}`,borderRadius:8,fontSize:13,fontFamily:F,outline:"none",boxSizing:"border-box"};
+const lS = {fontSize:10,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:.08,display:"block",marginBottom:5};
+
+// ── Login ─────────────────────────────────────────────────────────────────────
 function LoginScreen({ onLogin }) {
-  const [email, setEmail]     = useState("");
+  const [email, setEmail]       = useState("");
   const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState("");
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState("");
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    setLoading(true);
-    setError("");
+    setLoading(true); setError("");
     const { data, error: err } = await supabase.auth.signInWithPassword({ email, password });
     if (err) { setError(err.message); setLoading(false); return; }
-    // Verify super admin
     const { data: profile } = await supabase.from("profiles")
-      .select("is_super_admin, role")
-      .eq("id", data.user.id)
-      .single();
+      .select("is_super_admin").eq("id", data.user.id).single();
     if (!profile?.is_super_admin) {
       await supabase.auth.signOut();
       setError("Access denied. Super admin only.");
-      setLoading(false);
-      return;
+      setLoading(false); return;
     }
     onLogin(data.user);
     setLoading(false);
   };
 
   return (
-    <div style={{minHeight:"100vh",background:"#0D1B3E",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:F}}>
+    <div style={{minHeight:"100vh",background:C.navy,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:F}}>
       <div style={{background:C.white,borderRadius:16,padding:40,width:380,boxShadow:"0 24px 80px rgba(0,0,0,0.3)"}}>
         <div style={{textAlign:"center",marginBottom:32}}>
           <img src="/Fingoh_Black.png" alt="Fingoh" style={{height:32,display:"block",margin:"0 auto 4px"}}/>
@@ -95,14 +81,12 @@ function LoginScreen({ onLogin }) {
         </div>
         <form onSubmit={handleLogin}>
           <div style={{marginBottom:16}}>
-            <label style={{fontSize:11,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:.08,display:"block",marginBottom:6}}>Email</label>
-            <input value={email} onChange={e=>setEmail(e.target.value)} type="email" required
-              style={{width:"100%",padding:"10px 12px",border:`1px solid ${C.border}`,borderRadius:8,fontSize:13,fontFamily:F,outline:"none",boxSizing:"border-box"}}/>
+            <label style={lS}>Email</label>
+            <input value={email} onChange={e=>setEmail(e.target.value)} type="email" required style={iS}/>
           </div>
           <div style={{marginBottom:24}}>
-            <label style={{fontSize:11,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:.08,display:"block",marginBottom:6}}>Password</label>
-            <input value={password} onChange={e=>setPassword(e.target.value)} type="password" required
-              style={{width:"100%",padding:"10px 12px",border:`1px solid ${C.border}`,borderRadius:8,fontSize:13,fontFamily:F,outline:"none",boxSizing:"border-box"}}/>
+            <label style={lS}>Password</label>
+            <input value={password} onChange={e=>setPassword(e.target.value)} type="password" required style={iS}/>
           </div>
           {error && <p style={{fontSize:12,color:C.red,marginBottom:16,textAlign:"center"}}>{error}</p>}
           <button type="submit" disabled={loading}
@@ -115,7 +99,237 @@ function LoginScreen({ onLogin }) {
   );
 }
 
-// ── Stats Card ────────────────────────────────────────────────────────────────
+// ── Plan feature card (read-only preview) ─────────────────────────────────────
+function PlanFeatureCard({ config, compact = false }) {
+  if (!config) return null;
+  const pc = PLAN_COLORS[config.plan_id] || PLAN_COLORS.trial;
+  const features = config.features_list || [];
+
+  if (compact) {
+    return (
+      <div style={{background:pc.bg,border:`1.5px solid ${pc.fg}33`,borderRadius:10,padding:"14px 16px"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+          <div>
+            <div style={{fontSize:13,fontWeight:700,color:pc.fg}}>{config.label}</div>
+            <div style={{fontSize:11,color:C.muted,marginTop:2}}>{config.description}</div>
+          </div>
+          {(config.price_inr || config.price_usd) && (
+            <div style={{textAlign:"right",flexShrink:0,marginLeft:12}}>
+              {config.price_inr ? <div style={{fontSize:12,fontWeight:700,color:pc.fg}}>₹{config.price_inr?.toLocaleString()}</div> : null}
+              {config.price_usd ? <div style={{fontSize:11,color:C.muted}}>${config.price_usd}</div> : null}
+            </div>
+          )}
+        </div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:5,marginBottom:8}}>
+          {features.slice(0,4).map((f,i) => (
+            <span key={i} style={{fontSize:10,padding:"2px 8px",borderRadius:99,background:"white",color:pc.fg,fontWeight:600,border:`1px solid ${pc.fg}44`}}>✓ {f}</span>
+          ))}
+          {features.length > 4 && <span style={{fontSize:10,color:C.muted}}>+{features.length-4} more</span>}
+        </div>
+        <div style={{display:"flex",gap:12,fontSize:10,color:C.muted}}>
+          <span>📅 {config.max_events >= 999 ? "Unlimited events" : `${config.max_events} event${config.max_events>1?"s":""}`}</span>
+          <span>👥 {config.max_staff_seats >= 999 ? "Unlimited staff" : `${config.max_staff_seats} staff seats`}</span>
+          <span>🎧 {SUPPORT_LABELS[config.support_level] || config.support_level}</span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{background:C.white,border:`1.5px solid ${pc.fg}33`,borderRadius:12,padding:"20px 22px",position:"relative"}}>
+      <div style={{position:"absolute",top:14,right:14,fontSize:10,padding:"2px 8px",borderRadius:99,background:pc.bg,color:pc.fg,fontWeight:700}}>{config.plan_id}</div>
+      <div style={{fontSize:15,fontWeight:700,color:pc.fg,marginBottom:4}}>{config.label}</div>
+      <div style={{fontSize:12,color:C.muted,marginBottom:12,lineHeight:1.5}}>{config.description}</div>
+      {(config.price_inr != null || config.price_usd != null) && (
+        <div style={{marginBottom:12}}>
+          {config.price_inr === 0 ? (
+            <span style={{fontSize:18,fontWeight:800,color:pc.fg}}>Free</span>
+          ) : (
+            <>
+              {config.price_inr ? <span style={{fontSize:18,fontWeight:800,color:pc.fg}}>₹{config.price_inr?.toLocaleString()}</span> : null}
+              {config.price_usd ? <span style={{fontSize:12,color:C.muted,marginLeft:8}}>${config.price_usd} USD</span> : null}
+            </>
+          )}
+        </div>
+      )}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:12,padding:"10px 12px",background:C.light,borderRadius:8}}>
+        <div style={{textAlign:"center"}}>
+          <div style={{fontSize:16,fontWeight:800,color:C.navy}}>{config.max_events >= 999 ? "∞" : config.max_events}</div>
+          <div style={{fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:.05}}>Events</div>
+        </div>
+        <div style={{textAlign:"center"}}>
+          <div style={{fontSize:16,fontWeight:800,color:C.navy}}>{config.max_staff_seats >= 999 ? "∞" : config.max_staff_seats}</div>
+          <div style={{fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:.05}}>Staff Seats</div>
+        </div>
+        <div style={{textAlign:"center"}}>
+          <div style={{fontSize:11,fontWeight:700,color:C.navy}}>{SUPPORT_LABELS[config.support_level] || config.support_level}</div>
+          <div style={{fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:.05}}>Support</div>
+        </div>
+      </div>
+      <div style={{display:"flex",flexDirection:"column",gap:4}}>
+        {features.map((f,i) => (
+          <div key={i} style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:C.dark}}>
+            <span style={{color:C.green,fontWeight:700,fontSize:13}}>✓</span> {f}
+          </div>
+        ))}
+      </div>
+      <div style={{marginTop:12,display:"flex",gap:8,flexWrap:"wrap"}}>
+        {config.has_ai_features      && <span style={{fontSize:10,padding:"2px 7px",borderRadius:99,background:"#EFF6FF",color:"#1D4ED8",fontWeight:600}}>AI features</span>}
+        {config.has_crm_sync         && <span style={{fontSize:10,padding:"2px 7px",borderRadius:99,background:"#F0FDF4",color:"#166534",fontWeight:600}}>CRM sync</span>}
+        {config.has_deep_iei         && <span style={{fontSize:10,padding:"2px 7px",borderRadius:99,background:"#F5F3FF",color:"#5B21B6",fontWeight:600}}>Deep IEI</span>}
+        {config.has_walk_in_capture  && <span style={{fontSize:10,padding:"2px 7px",borderRadius:99,background:"#FFFBEB",color:"#92400E",fontWeight:600}}>Walk-in capture</span>}
+        {config.has_meeting_scheduler&& <span style={{fontSize:10,padding:"2px 7px",borderRadius:99,background:"#FFF1F2",color:"#9F1239",fontWeight:600}}>Meeting scheduler</span>}
+      </div>
+    </div>
+  );
+}
+
+// ── Plans Config Screen ───────────────────────────────────────────────────────
+function PlansConfigScreen() {
+  const [configs, setConfigs]   = useState([]);
+  const [loading, setLoading]   = useState(true);
+  const [editing, setEditing]   = useState(null); // plan_id being edited
+  const [editForm, setEditForm] = useState({});
+  const [saving, setSaving]     = useState(false);
+  const [resetting, setResetting] = useState(false);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    apiCall("/admin/plan-configs")
+      .then(data => { setConfigs(data); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const startEdit = (cfg) => {
+    setEditing(cfg.plan_id);
+    setEditForm({
+      ...cfg,
+      features_list: Array.isArray(cfg.features_list) ? cfg.features_list.join("\n") : (cfg.features_list || ""),
+    });
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const payload = {
+        ...editForm,
+        features_list: typeof editForm.features_list === "string"
+          ? editForm.features_list.split("\n").map(s=>s.trim()).filter(Boolean)
+          : editForm.features_list,
+        max_events: parseInt(editForm.max_events) || 1,
+        max_staff_seats: parseInt(editForm.max_staff_seats) || 3,
+        price_inr: editForm.price_inr ? parseInt(editForm.price_inr) : null,
+        price_usd: editForm.price_usd ? parseInt(editForm.price_usd) : null,
+        sort_order: parseInt(editForm.sort_order) || 0,
+      };
+      await apiCall(`/admin/plan-configs/${editing}`, { method:"PUT", body:JSON.stringify(payload) });
+      setEditing(null);
+      load();
+    } catch(e) { alert("Save failed: "+e.message); }
+    setSaving(false);
+  };
+
+  const handleReset = async () => {
+    if (!window.confirm("Reset all plans to default configuration? Any custom changes will be lost.")) return;
+    setResetting(true);
+    try {
+      await apiCall("/admin/plan-configs/reset-defaults", { method:"POST" });
+      load();
+    } catch(e) { alert("Reset failed: "+e.message); }
+    setResetting(false);
+  };
+
+  const toggle = (field) => setEditForm(f => ({...f, [field]: !f[field]}));
+
+  const ToggleChip = ({field, label}) => (
+    <button onClick={()=>toggle(field)}
+      style={{padding:"5px 12px",borderRadius:99,border:`1.5px solid ${editForm[field]?C.green:C.border}`,background:editForm[field]?"#F0FDF4":C.white,color:editForm[field]?C.green:C.muted,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:F}}>
+      {editForm[field] ? "✓" : "○"} {label}
+    </button>
+  );
+
+  if (loading) return <div style={{padding:40,color:C.muted,fontSize:13}}>Loading plan configurations…</div>;
+
+  return (
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24}}>
+        <div>
+          <h2 style={{fontSize:18,fontWeight:700,color:C.navy,margin:0}}>Plans & Packages</h2>
+          <p style={{fontSize:12,color:C.muted,margin:"4px 0 0 0"}}>Define what each plan includes. These features are shown when creating or upgrading a customer.</p>
+        </div>
+        <button onClick={handleReset} disabled={resetting}
+          style={{padding:"7px 16px",background:C.white,color:C.muted,border:`1px solid ${C.border}`,borderRadius:8,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:F}}>
+          {resetting ? "Resetting…" : "↺ Reset to defaults"}
+        </button>
+      </div>
+
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:16}}>
+        {configs.filter(c=>c.is_active).map(cfg => (
+          <div key={cfg.plan_id}>
+            {editing === cfg.plan_id ? (
+              <div style={{background:C.white,border:`2px solid ${C.blue}`,borderRadius:12,padding:"20px 22px"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+                  <span style={{fontSize:13,fontWeight:700,color:C.navy}}>Editing: {cfg.label}</span>
+                  <div style={{display:"flex",gap:6}}>
+                    <button onClick={()=>setEditing(null)} style={{padding:"4px 10px",background:C.white,color:C.muted,border:`1px solid ${C.border}`,borderRadius:6,fontSize:11,cursor:"pointer",fontFamily:F}}>Cancel</button>
+                    <button onClick={handleSave} disabled={saving} style={{padding:"4px 10px",background:C.navy,color:C.white,border:"none",borderRadius:6,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:F}}>{saving?"Saving…":"Save"}</button>
+                  </div>
+                </div>
+                <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                  <div><label style={lS}>Label</label><input value={editForm.label||""} onChange={e=>setEditForm(f=>({...f,label:e.target.value}))} style={iS}/></div>
+                  <div><label style={lS}>Description</label><input value={editForm.description||""} onChange={e=>setEditForm(f=>({...f,description:e.target.value}))} style={iS}/></div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                    <div><label style={lS}>Max Events</label><input type="number" value={editForm.max_events||1} onChange={e=>setEditForm(f=>({...f,max_events:e.target.value}))} style={iS}/></div>
+                    <div><label style={lS}>Staff Seats</label><input type="number" value={editForm.max_staff_seats||3} onChange={e=>setEditForm(f=>({...f,max_staff_seats:e.target.value}))} style={iS}/></div>
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                    <div><label style={lS}>Price (₹ INR)</label><input type="number" value={editForm.price_inr||""} onChange={e=>setEditForm(f=>({...f,price_inr:e.target.value}))} style={iS} placeholder="0 for free"/></div>
+                    <div><label style={lS}>Price ($ USD)</label><input type="number" value={editForm.price_usd||""} onChange={e=>setEditForm(f=>({...f,price_usd:e.target.value}))} style={iS} placeholder="0 for free"/></div>
+                  </div>
+                  <div>
+                    <label style={lS}>Support Level</label>
+                    <select value={editForm.support_level||"email"} onChange={e=>setEditForm(f=>({...f,support_level:e.target.value}))} style={iS}>
+                      <option value="email">Email support</option>
+                      <option value="priority">Priority support</option>
+                      <option value="dedicated">Dedicated CSM</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={lS}>Features list (one per line)</label>
+                    <textarea value={editForm.features_list||""} onChange={e=>setEditForm(f=>({...f,features_list:e.target.value}))}
+                      rows={5} style={{...iS,resize:"vertical",lineHeight:1.6}} placeholder="1 event&#10;IEI scoring&#10;Staff app"/>
+                  </div>
+                  <div>
+                    <label style={{...lS,marginBottom:8}}>Included features</label>
+                    <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                      <ToggleChip field="has_ai_features"       label="AI features"/>
+                      <ToggleChip field="has_crm_sync"          label="CRM sync"/>
+                      <ToggleChip field="has_deep_iei"          label="Deep IEI"/>
+                      <ToggleChip field="has_walk_in_capture"   label="Walk-in capture"/>
+                      <ToggleChip field="has_meeting_scheduler" label="Meeting scheduler"/>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div style={{position:"relative"}}>
+                <PlanFeatureCard config={cfg}/>
+                <button onClick={()=>startEdit(cfg)}
+                  style={{position:"absolute",top:14,right:60,padding:"3px 10px",background:"rgba(255,255,255,0.9)",color:C.navy,border:`1px solid ${C.border}`,borderRadius:6,fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:F}}>
+                  Edit
+                </button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Stat Card ─────────────────────────────────────────────────────────────────
 function StatCard({ val, label, color }) {
   return (
     <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:12,padding:"20px 24px"}}>
@@ -126,22 +340,21 @@ function StatCard({ val, label, color }) {
 }
 
 // ── Create Customer Modal ─────────────────────────────────────────────────────
-function CreateCustomerModal({ onClose, onCreated }) {
+function CreateCustomerModal({ onClose, onCreated, planConfigs }) {
   const [form, setForm] = useState({
     company_name:"", slug:"", admin_email:"", admin_name:"",
     plan:"single_event", max_events:1, admin_notes:"", subscription_expires_at:""
   });
-
-  const handlePlanChange = (plan) => {
-    const p = PLANS.find(x => x.id === plan);
-    setForm(f => ({...f, plan, max_events: p ? p.max_events : f.max_events}));
-  };
   const [loading, setLoading] = useState(false);
   const [result, setResult]   = useState(null);
   const [error, setError]     = useState("");
 
-  const iS = {width:"100%",padding:"9px 12px",border:`1px solid ${C.border}`,borderRadius:8,fontSize:13,fontFamily:F,outline:"none",boxSizing:"border-box"};
-  const lS = {fontSize:10,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:.08,display:"block",marginBottom:5};
+  const selectedPlanConfig = planConfigs.find(p => p.plan_id === form.plan);
+
+  const handlePlanChange = (plan) => {
+    const cfg = planConfigs.find(p => p.plan_id === plan);
+    setForm(f => ({...f, plan, max_events: cfg ? cfg.max_events : f.max_events}));
+  };
 
   const handleSubmit = async () => {
     if (!form.company_name||!form.slug||!form.admin_email||!form.admin_name) {
@@ -154,16 +367,13 @@ function CreateCustomerModal({ onClose, onCreated }) {
       });
       setResult(data);
       onCreated();
-    } catch(e) {
-      setError(e.message);
-    } finally {
-      setLoading(false);
-    }
+    } catch(e) { setError(e.message); }
+    setLoading(false);
   };
 
   return (
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:24}}>
-      <div style={{background:C.white,borderRadius:16,padding:32,maxWidth:520,width:"100%",maxHeight:"90vh",overflowY:"auto",boxShadow:"0 24px 80px rgba(0,0,0,0.2)"}}>
+      <div style={{background:C.white,borderRadius:16,padding:32,maxWidth:600,width:"100%",maxHeight:"92vh",overflowY:"auto",boxShadow:"0 24px 80px rgba(0,0,0,0.2)"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24}}>
           <h2 style={{fontSize:16,fontWeight:700,color:C.navy,margin:0}}>Create New Customer</h2>
           <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",fontSize:18,color:C.muted}}>✕</button>
@@ -172,44 +382,67 @@ function CreateCustomerModal({ onClose, onCreated }) {
         {result ? (
           <div>
             <div style={{background:C.ltgrn,border:"1px solid #86EFAC",borderRadius:10,padding:20,marginBottom:20}}>
-              <p style={{fontSize:14,fontWeight:700,color:"#14532D",margin:"0 0 12px 0"}}>✓ Customer created successfully!</p>
+              <p style={{fontSize:14,fontWeight:700,color:"#14532D",margin:"0 0 12px 0"}}>✓ Customer created! Welcome email sent.</p>
               <p style={{fontSize:12,color:"#166534",margin:"4px 0"}}><strong>Company:</strong> {form.company_name}</p>
               <p style={{fontSize:12,color:"#166534",margin:"4px 0"}}><strong>Login Email:</strong> {result.email}</p>
               <p style={{fontSize:12,color:"#166534",margin:"4px 0"}}><strong>Password:</strong> <code style={{background:"#DCFCE7",padding:"2px 6px",borderRadius:4}}>{result.password}</code></p>
               <p style={{fontSize:11,color:"#DC2626",margin:"8px 0 0 0",fontWeight:600}}>⚠ Save this password — it won't be shown again</p>
             </div>
-            <button onClick={onClose} style={{width:"100%",padding:"10px 0",background:C.navy,color:C.white,border:"none",borderRadius:8,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:F}}>
-              Done
-            </button>
+            <button onClick={onClose} style={{width:"100%",padding:"10px 0",background:C.navy,color:C.white,border:"none",borderRadius:8,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:F}}>Done</button>
           </div>
         ) : (
           <div style={{display:"flex",flexDirection:"column",gap:14}}>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-              <div><label style={lS}>Company Name *</label><input value={form.company_name} onChange={e=>setForm(p=>({...p,company_name:e.target.value,slug:e.target.value.toLowerCase().replace(/\s+/g,"-").replace(/[^a-z0-9-]/g,"")}))} style={iS} placeholder="Acme Corp"/></div>
-              <div><label style={lS}>Slug *</label><input value={form.slug} onChange={e=>setForm(p=>({...p,slug:e.target.value}))} style={iS} placeholder="acme-corp"/></div>
+              <div><label style={lS}>Company Name *</label>
+                <input value={form.company_name}
+                  onChange={e=>setForm(p=>({...p,company_name:e.target.value,slug:e.target.value.toLowerCase().replace(/\s+/g,"-").replace(/[^a-z0-9-]/g,"")}))}
+                  style={iS} placeholder="Acme Corp"/>
+              </div>
+              <div><label style={lS}>Slug *</label>
+                <input value={form.slug} onChange={e=>setForm(p=>({...p,slug:e.target.value}))} style={iS} placeholder="acme-corp"/>
+              </div>
             </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
               <div><label style={lS}>Admin Name *</label><input value={form.admin_name} onChange={e=>setForm(p=>({...p,admin_name:e.target.value}))} style={iS} placeholder="John Smith"/></div>
               <div><label style={lS}>Admin Email *</label><input value={form.admin_email} onChange={e=>setForm(p=>({...p,admin_email:e.target.value}))} type="email" style={iS} placeholder="john@acme.com"/></div>
             </div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
-              <div>
-                <label style={lS}>Plan</label>
-                <select value={form.plan} onChange={e=>handlePlanChange(e.target.value)} style={iS}>
-                  {PLANS.map(p=><option key={p.id} value={p.id}>{p.label}</option>)}
-                </select>
-                <p style={{fontSize:10,color:C.muted,margin:"4px 0 0"}}>{PLANS.find(p=>p.id===form.plan)?.description}</p>
+
+            {/* Plan selector */}
+            <div>
+              <label style={lS}>Plan</label>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:10}}>
+                {planConfigs.filter(p=>p.is_active && !["starter","pro","enterprise"].includes(p.plan_id)).map(cfg => {
+                  const pc = PLAN_COLORS[cfg.plan_id] || PLAN_COLORS.trial;
+                  const active = form.plan === cfg.plan_id;
+                  return (
+                    <button key={cfg.plan_id} onClick={()=>handlePlanChange(cfg.plan_id)}
+                      style={{padding:"6px 14px",borderRadius:8,border:`2px solid ${active?pc.fg:C.border}`,background:active?pc.bg:C.white,color:active?pc.fg:C.muted,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:F,transition:"all .1s"}}>
+                      {cfg.label}
+                    </button>
+                  );
+                })}
               </div>
-              <div><label style={lS}>Max Events</label><input value={form.max_events} onChange={e=>setForm(p=>({...p,max_events:e.target.value}))} type="number" min="1" style={iS}/></div>
-              <div><label style={lS}>Expires</label><input value={form.subscription_expires_at} onChange={e=>setForm(p=>({...p,subscription_expires_at:e.target.value}))} type="date" style={iS}/></div>
+              {/* Plan feature preview */}
+              {selectedPlanConfig && <PlanFeatureCard config={selectedPlanConfig} compact/>}
             </div>
-            <div><label style={lS}>Admin Notes</label><textarea value={form.admin_notes} onChange={e=>setForm(p=>({...p,admin_notes:e.target.value}))} rows={2} style={{...iS,resize:"vertical"}} placeholder="Internal notes…"/></div>
+
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+              <div><label style={lS}>Max Events</label>
+                <input value={form.max_events} onChange={e=>setForm(p=>({...p,max_events:e.target.value}))} type="number" min="1" style={iS}/>
+              </div>
+              <div><label style={lS}>Subscription Expires</label>
+                <input value={form.subscription_expires_at} onChange={e=>setForm(p=>({...p,subscription_expires_at:e.target.value}))} type="date" style={iS}/>
+              </div>
+            </div>
+            <div><label style={lS}>Admin Notes</label>
+              <textarea value={form.admin_notes} onChange={e=>setForm(p=>({...p,admin_notes:e.target.value}))} rows={2} style={{...iS,resize:"vertical"}} placeholder="Internal notes…"/>
+            </div>
             {error && <p style={{fontSize:12,color:C.red,margin:0}}>{error}</p>}
             <div style={{display:"flex",gap:10,marginTop:8}}>
               <button onClick={onClose} style={{flex:1,padding:"10px 0",background:C.white,color:C.muted,border:`1px solid ${C.border}`,borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:F}}>Cancel</button>
               <button onClick={handleSubmit} disabled={loading}
                 style={{flex:2,padding:"10px 0",background:loading?"#CBD5E1":C.navy,color:C.white,border:"none",borderRadius:8,fontSize:12,fontWeight:700,cursor:loading?"not-allowed":"pointer",fontFamily:F}}>
-                {loading?"Creating…":"Create Customer"}
+                {loading?"Creating…":"Create Customer & Send Welcome Email →"}
               </button>
             </div>
           </div>
@@ -219,52 +452,9 @@ function CreateCustomerModal({ onClose, onCreated }) {
   );
 }
 
-// ── Customer Row ──────────────────────────────────────────────────────────────
-function CustomerRow({ org, onSelect, onStatusChange, onResetPassword }) {
-  const [resetting, setResetting] = useState(false);
-  const pc = PLAN_COLORS[org.plan] || PLAN_COLORS.trial;
-  const sc = STATUS_COLORS[org.status] || STATUS_COLORS.active;
-  const expires = org.subscription_expires_at
-    ? new Date(org.subscription_expires_at).toLocaleDateString()
-    : "—";
-
-  return (
-    <div style={{padding:"14px 20px",borderBottom:`1px solid ${C.border}`,display:"grid",gridTemplateColumns:"2fr 1fr 80px 80px 100px 60px 160px",gap:12,alignItems:"center",background:C.white,cursor:"pointer"}}
-      onClick={()=>onSelect(org)}>
-      <div>
-        <p style={{fontSize:13,fontWeight:600,color:C.navy,margin:0}}>{org.name}</p>
-        <p style={{fontSize:11,color:C.muted,margin:0}}>{org.slug} · {org.users?.[0]?.name||"—"}</p>
-      </div>
-      <div style={{fontSize:11,color:C.muted}}>{org.users?.[0] ? org.users[0].name : "—"}</div>
-      <div style={{textAlign:"center"}}>
-        <span style={{fontSize:10,padding:"3px 8px",borderRadius:99,background:pc.bg,color:pc.fg,fontWeight:700}}>{org.plan}</span>
-      </div>
-      <div style={{textAlign:"center"}}>
-        <span style={{fontSize:10,padding:"3px 8px",borderRadius:99,background:sc.bg,color:sc.fg,fontWeight:700}}>{org.status}</span>
-      </div>
-      <div style={{textAlign:"center",fontSize:11,color:C.muted}}>{expires}</div>
-      <div style={{textAlign:"center"}}>
-        <span style={{fontSize:12,fontWeight:600,color:C.navy}}>{org.event_count||0}</span>
-        <span style={{fontSize:10,color:C.muted}}> events</span>
-      </div>
-      <div style={{display:"flex",gap:6}} onClick={e=>e.stopPropagation()}>
-        <select value={org.status} onChange={e=>onStatusChange(org.id, e.target.value)}
-          style={{padding:"4px 6px",border:`1px solid ${C.border}`,borderRadius:6,fontSize:11,fontFamily:F,cursor:"pointer"}}>
-          <option value="active">Active</option>
-          <option value="suspended">Suspended</option>
-          <option value="cancelled">Cancelled</option>
-        </select>
-        <button onClick={async()=>{ setResetting(true); await onResetPassword(org.id); setResetting(false); }}
-          disabled={resetting}
-          style={{padding:"4px 8px",background:C.ltblue,color:C.blue,border:`1px solid #BFDBFE`,borderRadius:6,fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:F,whiteSpace:"nowrap"}}>
-          {resetting?"…":"Reset PW"}
-        </button>
-      </div>
-    </div>
-  );
-}
+// ── Activity Log ──────────────────────────────────────────────────────────────
 function ActivityLog({ orgId }) {
-  const [logs, setLogs] = useState([]);
+  const [logs, setLogs]     = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(()=>{
@@ -273,16 +463,10 @@ function ActivityLog({ orgId }) {
       .catch(()=>setLoading(false));
   },[orgId]);
 
-  const ACTION_ICONS = {
-    event_created:      "📅",
-    contacts_uploaded:  "⬆",
-    meeting_sent:       "🤝",
-    crm_sync:           "🔗",
-    login:              "🔑",
-  };
+  const ACTION_ICONS = {event_created:"📅",contacts_uploaded:"⬆",meeting_sent:"🤝",crm_sync:"🔗",login:"🔑"};
 
-  if (loading) return <div style={{color:"#94A3B8",fontSize:12}}>Loading…</div>;
-  if (!logs.length) return <div style={{color:"#94A3B8",fontSize:12}}>No activity yet</div>;
+  if (loading) return <div style={{color:C.muted,fontSize:12}}>Loading…</div>;
+  if (!logs.length) return <div style={{color:C.muted,fontSize:12}}>No activity yet</div>;
 
   return (
     <div style={{display:"flex",flexDirection:"column",gap:0}}>
@@ -292,16 +476,17 @@ function ActivityLog({ orgId }) {
             {ACTION_ICONS[log.action]||"•"}
           </div>
           <div style={{flex:1}}>
-            <p style={{fontSize:12,fontWeight:600,color:"#1E293B",margin:0}}>{log.description}</p>
-            <p style={{fontSize:11,color:"#94A3B8",margin:"2px 0 0 0"}}>{new Date(log.created_at).toLocaleString()}</p>
+            <p style={{fontSize:12,fontWeight:600,color:C.dark,margin:0}}>{log.description}</p>
+            <p style={{fontSize:11,color:C.muted,margin:"2px 0 0 0"}}>{new Date(log.created_at).toLocaleString()}</p>
           </div>
         </div>
       ))}
     </div>
   );
 }
-// ── Customer Detail View ──────────────────────────────────────────────────────
-function CustomerDetail({ orgId, onBack }) {
+
+// ── Customer Detail ───────────────────────────────────────────────────────────
+function CustomerDetail({ orgId, onBack, planConfigs }) {
   const [org, setOrg]         = useState(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
@@ -312,29 +497,28 @@ function CustomerDetail({ orgId, onBack }) {
   const [addingUser, setAddingUser]   = useState(false);
   const [addUserResult, setAddUserResult] = useState(null);
 
-  useEffect(()=>{
-    apiCall(`/admin/customers/${orgId}`).then(data=>{
+  const reload = useCallback(() => {
+    apiCall(`/admin/customers/${orgId}`).then(data => {
       setOrg(data);
       setForm({
-        plan: data.plan||"starter",
-        max_events: data.max_events||3,
+        plan: data.plan||"single_event",
+        max_events: data.max_events||1,
         status: data.status||"active",
         subscription_expires_at: data.subscription_expires_at?.slice(0,10)||"",
         admin_notes: data.admin_notes||"",
       });
       setLoading(false);
     }).catch(()=>setLoading(false));
-  },[orgId]);
+  }, [orgId]);
+
+  useEffect(() => { reload(); }, [reload]);
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      await apiCall(`/admin/customers/${orgId}`, {
-        method:"PATCH", body:JSON.stringify(form)
-      });
+      await apiCall(`/admin/customers/${orgId}`, { method:"PATCH", body:JSON.stringify(form) });
       setEditing(false);
-      const data = await apiCall(`/admin/customers/${orgId}`);
-      setOrg(data);
+      reload();
     } catch(e) { alert("Failed: "+e.message); }
     setSaving(false);
   };
@@ -342,10 +526,9 @@ function CustomerDetail({ orgId, onBack }) {
   if (loading) return <div style={{padding:40,textAlign:"center",color:C.muted,fontFamily:F}}>Loading…</div>;
   if (!org)    return <div style={{padding:40,textAlign:"center",color:C.red,fontFamily:F}}>Customer not found</div>;
 
-  const iS = {width:"100%",padding:"8px 12px",border:`1px solid ${C.border}`,borderRadius:8,fontSize:13,fontFamily:F,outline:"none",boxSizing:"border-box"};
-  const lS = {fontSize:10,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:.08,display:"block",marginBottom:5};
   const pc = PLAN_COLORS[org.plan]||PLAN_COLORS.trial;
   const sc = STATUS_COLORS[org.status]||STATUS_COLORS.active;
+  const selectedPlanConfig = planConfigs.find(p => p.plan_id === form.plan);
 
   return (
     <div style={{fontFamily:F}}>
@@ -365,63 +548,78 @@ function CustomerDetail({ orgId, onBack }) {
       </div>
 
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:16}}>
-        {/* Subscription card */}
+        {/* Subscription */}
         <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:12,padding:24}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
             <h3 style={{fontSize:14,fontWeight:700,color:C.navy,margin:0}}>Subscription</h3>
             {!editing
               ? <button onClick={()=>setEditing(true)} style={{padding:"5px 12px",background:C.ltblue,color:C.blue,border:`1px solid #BFDBFE`,borderRadius:6,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:F}}>Edit</button>
               : <div style={{display:"flex",gap:6}}>
-                  <button onClick={()=>setEditing(false)} style={{padding:"5px 12px",background:C.white,color:C.muted,border:`1px solid ${C.border}`,borderRadius:6,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:F}}>Cancel</button>
-                  <button onClick={handleSave} disabled={saving} style={{padding:"5px 12px",background:C.navy,color:C.white,border:"none",borderRadius:6,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:F}}>{saving?"Saving…":"Save"}</button>
+                  <button onClick={()=>setEditing(false)} style={{padding:"5px 12px",background:C.white,color:C.muted,border:`1px solid ${C.border}`,borderRadius:6,fontSize:11,cursor:"pointer",fontFamily:F}}>Cancel</button>
+                  <button onClick={handleSave} disabled={saving} style={{padding:"5px 12px",background:C.navy,color:C.white,border:"none",borderRadius:6,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:F}}>{saving?"Saving…":"Save & Notify"}</button>
                 </div>
             }
           </div>
           {editing ? (
             <div style={{display:"flex",flexDirection:"column",gap:12}}>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                <div>
-                  <label style={lS}>Plan</label>
-                  <select value={form.plan} onChange={e=>{
-                    const p = PLANS.find(x=>x.id===e.target.value);
-                    setForm(f=>({...f, plan:e.target.value, max_events: p ? p.max_events : f.max_events}));
-                  }} style={iS}>
-                    {PLANS.map(p=><option key={p.id} value={p.id}>{p.label}</option>)}
-                  </select>
-                  <p style={{fontSize:10,color:C.muted,margin:"4px 0 0"}}>{PLANS.find(p=>p.id===form.plan)?.description}</p>
+              {/* Plan selector with feature preview */}
+              <div>
+                <label style={lS}>Plan</label>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
+                  {planConfigs.filter(p=>p.is_active && !["starter","pro","enterprise"].includes(p.plan_id)).map(cfg => {
+                    const pcc = PLAN_COLORS[cfg.plan_id] || PLAN_COLORS.trial;
+                    const active = form.plan === cfg.plan_id;
+                    return (
+                      <button key={cfg.plan_id} onClick={()=>{
+                        const c = planConfigs.find(p=>p.plan_id===cfg.plan_id);
+                        setForm(f=>({...f, plan:cfg.plan_id, max_events: c ? c.max_events : f.max_events}));
+                      }}
+                        style={{padding:"5px 12px",borderRadius:7,border:`2px solid ${active?pcc.fg:C.border}`,background:active?pcc.bg:C.white,color:active?pcc.fg:C.muted,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:F}}>
+                        {cfg.label}
+                      </button>
+                    );
+                  })}
                 </div>
+                {selectedPlanConfig && <PlanFeatureCard config={selectedPlanConfig} compact/>}
+                <p style={{fontSize:10,color:C.muted,marginTop:6}}>Changing plan will auto-email the customer.</p>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
                 <div>
                   <label style={lS}>Status</label>
                   <select value={form.status} onChange={e=>setForm(p=>({...p,status:e.target.value}))} style={iS}>
                     {["active","suspended","cancelled"].map(s=><option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
-              </div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
                 <div><label style={lS}>Max Events</label><input type="number" value={form.max_events} onChange={e=>setForm(p=>({...p,max_events:parseInt(e.target.value)}))} style={iS}/></div>
-                <div><label style={lS}>Expires</label><input type="date" value={form.subscription_expires_at} onChange={e=>setForm(p=>({...p,subscription_expires_at:e.target.value}))} style={iS}/></div>
               </div>
+              <div><label style={lS}>Expires</label><input type="date" value={form.subscription_expires_at} onChange={e=>setForm(p=>({...p,subscription_expires_at:e.target.value}))} style={iS}/></div>
               <div><label style={lS}>Admin Notes</label><textarea value={form.admin_notes} onChange={e=>setForm(p=>({...p,admin_notes:e.target.value}))} rows={2} style={{...iS,resize:"vertical"}}/></div>
             </div>
           ) : (
-            <div style={{display:"flex",flexDirection:"column",gap:10}}>
-              {[
-                ["Plan",       org.plan],
-                ["Status",     org.status],
-                ["Max Events", org.max_events],
-                ["Expires",    org.subscription_expires_at ? new Date(org.subscription_expires_at).toLocaleDateString() : "—"],
-                ["Notes",      org.admin_notes||"—"],
-              ].map(([k,v])=>(
-                <div key={k} style={{display:"flex",justifyContent:"space-between",fontSize:12}}>
-                  <span style={{color:C.muted,fontWeight:500}}>{k}</span>
-                  <span style={{color:C.dark,fontWeight:600}}>{v}</span>
-                </div>
-              ))}
+            <div>
+              <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:16}}>
+                {[
+                  ["Plan",       org.plan],
+                  ["Status",     org.status],
+                  ["Max Events", org.max_events],
+                  ["Expires",    org.subscription_expires_at ? new Date(org.subscription_expires_at).toLocaleDateString() : "—"],
+                  ["Notes",      org.admin_notes||"—"],
+                ].map(([k,v])=>(
+                  <div key={k} style={{display:"flex",justifyContent:"space-between",fontSize:12}}>
+                    <span style={{color:C.muted,fontWeight:500}}>{k}</span>
+                    <span style={{color:C.dark,fontWeight:600}}>{v}</span>
+                  </div>
+                ))}
+              </div>
+              {/* Show current plan features */}
+              {planConfigs.find(p=>p.plan_id===org.plan) && (
+                <PlanFeatureCard config={planConfigs.find(p=>p.plan_id===org.plan)} compact/>
+              )}
             </div>
           )}
         </div>
 
-             {/* Users card */}
+        {/* Users */}
         <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:12,padding:24}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
             <h3 style={{fontSize:14,fontWeight:700,color:C.navy,margin:0}}>Users ({org.users?.length||0})</h3>
@@ -439,29 +637,28 @@ function CustomerDetail({ orgId, onBack }) {
                   <p style={{fontSize:11,color:C.muted,margin:0}}>{u.email||"—"}</p>
                   <p style={{fontSize:10,color:C.muted,margin:"2px 0 0 0"}}>{u.role} · {u.title||"—"}</p>
                 </div>
-                <button
-                  onClick={async()=>{
+                <div style={{display:"flex",gap:6}}>
+                  <button onClick={async()=>{
                     if (!window.confirm(`Reset password for ${u.name}?`)) return;
                     try {
                       const data = await apiCall(`/admin/customers/${orgId}/reset-password`,{method:"POST"});
                       alert(`New password: ${data.new_password}\n\nSave this — shown once only.`);
                     } catch(e){ alert("Failed: "+e.message); }
                   }}
-                  style={{padding:"5px 12px",background:C.ltblue,color:C.blue,border:`1px solid #BFDBFE`,borderRadius:6,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:F}}>
-                  Reset PW
-                </button>
-                <button
-                  onClick={async()=>{
+                    style={{padding:"5px 10px",background:C.ltblue,color:C.blue,border:`1px solid #BFDBFE`,borderRadius:6,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:F}}>
+                    Reset PW
+                  </button>
+                  <button onClick={async()=>{
                     if (!window.confirm(`Delete user ${u.name}? This cannot be undone.`)) return;
                     try {
                       await apiCall(`/admin/customers/${orgId}/users/${u.id}`,{method:"DELETE"});
-                      const data = await apiCall(`/admin/customers/${orgId}`);
-                      setOrg(data);
+                      reload();
                     } catch(e){ alert("Failed: "+e.message); }
                   }}
-                  style={{padding:"5px 12px",background:"#FEF2F2",color:C.red,border:"1px solid #FECACA",borderRadius:6,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:F}}>
-                  Delete
-                </button>
+                    style={{padding:"5px 10px",background:C.ltred,color:C.red,border:"1px solid #FECACA",borderRadius:6,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:F}}>
+                    Delete
+                  </button>
+                </div>
               </div>
             ))
           }
@@ -473,7 +670,7 @@ function CustomerDetail({ orgId, onBack }) {
         <h3 style={{fontSize:14,fontWeight:700,color:C.navy,margin:"0 0 16px 0"}}>Events ({org.events?.length||0})</h3>
         {org.events?.length===0
           ? <p style={{fontSize:12,color:C.muted}}>No events created yet</p>
-          : <div style={{display:"flex",flexDirection:"column",gap:0}}>
+          : <div>
               <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr 1fr",gap:12,padding:"6px 0",borderBottom:`1px solid ${C.border}`}}>
                 {["Event Name","Date From","Date To","Created"].map(h=>(
                   <div key={h} style={{fontSize:10,fontWeight:600,color:C.muted,textTransform:"uppercase"}}>{h}</div>
@@ -486,47 +683,46 @@ function CustomerDetail({ orgId, onBack }) {
                   <span style={{fontSize:12,color:C.muted}}>{ev.date_to||"—"}</span>
                   <span style={{fontSize:12,color:C.muted}}>{new Date(ev.created_at).toLocaleDateString()}</span>
                 </div>
-            ))}
+              ))}
             </div>
         }
-        {/* Activity Log */}
+      </div>
+
+      {/* Activity Log */}
       <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:12,padding:24,marginBottom:16}}>
         <h3 style={{fontSize:14,fontWeight:700,color:C.navy,margin:"0 0 16px 0"}}>Activity Log</h3>
         <ActivityLog orgId={orgId}/>
       </div>
-        {/* Delete Customer */}
-      <div style={{background:"#FEF2F2",border:"1px solid #FECACA",borderRadius:12,padding:24,marginTop:16}}>
+
+      {/* Danger Zone */}
+      <div style={{background:C.ltred,border:"1px solid #FECACA",borderRadius:12,padding:24}}>
         <h3 style={{fontSize:14,fontWeight:700,color:C.red,margin:"0 0 8px 0"}}>Danger Zone</h3>
         <p style={{fontSize:12,color:"#991B1B",margin:"0 0 16px 0",lineHeight:1.6}}>
-          Deleting this customer will permanently remove the organisation, all users, all events, all contacts, 
-          all meeting requests, all conversation signals and all CRM connections. <strong>This action cannot be undone.</strong>
+          Deleting this customer permanently removes the organisation, all users, all events, all contacts, all meetings, and all CRM connections. <strong>This action cannot be undone.</strong>
         </p>
         <button
           onClick={async()=>{
-            const confirmed = window.confirm(
-              `Are you sure you want to delete "${org.name}"?\n\nThis will permanently delete:\n• All users\n• All events (${org.events?.length||0})\n• All contacts and meetings\n\nThis cannot be undone.`
-            );
-            if (!confirmed) return;
-            const doubleConfirm = window.confirm(`Type OK to confirm deletion of "${org.name}"`);
-            if (!doubleConfirm) return;
+            if (!window.confirm(`Delete "${org.name}"?\n\nThis will permanently delete:\n• All users\n• All events (${org.events?.length||0})\n• All contacts and meetings\n\nThis cannot be undone.`)) return;
+            if (!window.confirm(`Confirm deletion of "${org.name}"`)) return;
             try {
               await apiCall(`/admin/customers/${orgId}`, {method:"DELETE"});
               alert(`"${org.name}" has been deleted.`);
               onBack();
-              window.location.reload();
             } catch(e) { alert("Failed: "+e.message); }
           }}
           style={{padding:"9px 20px",background:C.red,color:"#fff",border:"none",borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:F}}>
           Delete Customer & All Data
         </button>
       </div>
+
       {/* Add User Modal */}
       {showAddUser && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center"}}>
           <div style={{background:C.white,borderRadius:14,padding:28,maxWidth:420,width:"100%"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
               <h3 style={{fontSize:15,fontWeight:700,color:C.navy,margin:0}}>Add User</h3>
-              <button onClick={()=>{setShowAddUser(false);setAddUserResult(null);setAddUserForm({name:"",email:"",role:"user",title:""});}} style={{background:"none",border:"none",cursor:"pointer",fontSize:18,color:C.muted}}>✕</button>
+              <button onClick={()=>{setShowAddUser(false);setAddUserResult(null);setAddUserForm({name:"",email:"",role:"user",title:""});}}
+                style={{background:"none",border:"none",cursor:"pointer",fontSize:18,color:C.muted}}>✕</button>
             </div>
             {addUserResult ? (
               <div>
@@ -535,11 +731,8 @@ function CustomerDetail({ orgId, onBack }) {
                   <p style={{fontSize:12,color:"#166534",margin:"4px 0"}}><strong>Password:</strong> <code style={{background:"#DCFCE7",padding:"2px 6px",borderRadius:4}}>{addUserResult.password}</code></p>
                   <p style={{fontSize:11,color:C.red,margin:"8px 0 0 0",fontWeight:600}}>⚠ Save this password — shown once only</p>
                 </div>
-                <button onClick={()=>{
-                  setShowAddUser(false);setAddUserResult(null);
-                  setAddUserForm({name:"",email:"",role:"user",title:""});
-                  apiCall(`/admin/customers/${orgId}`).then(data=>setOrg(data));
-                }} style={{width:"100%",padding:"10px 0",background:C.navy,color:C.white,border:"none",borderRadius:8,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:F}}>Done</button>
+                <button onClick={()=>{setShowAddUser(false);setAddUserResult(null);setAddUserForm({name:"",email:"",role:"user",title:""});reload();}}
+                  style={{width:"100%",padding:"10px 0",background:C.navy,color:C.white,border:"none",borderRadius:8,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:F}}>Done</button>
               </div>
             ) : (
               <div style={{display:"flex",flexDirection:"column",gap:12}}>
@@ -560,9 +753,7 @@ function CustomerDetail({ orgId, onBack }) {
                     onClick={async()=>{
                       setAddingUser(true);
                       try {
-                        const data = await apiCall(`/admin/customers/${orgId}/users`,{
-                          method:"POST", body:JSON.stringify(addUserForm)
-                        });
+                        const data = await apiCall(`/admin/customers/${orgId}/users`,{method:"POST",body:JSON.stringify(addUserForm)});
                         setAddUserResult(data);
                       } catch(e){ alert("Failed: "+e.message); }
                       setAddingUser(false);
@@ -575,10 +766,63 @@ function CustomerDetail({ orgId, onBack }) {
             )}
           </div>
         </div>
-      )}</div>
+      )}
     </div>
   );
 }
+
+// ── Customer Row ──────────────────────────────────────────────────────────────
+function CustomerRow({ org, onSelect, onStatusChange, onResetPassword }) {
+  const [resetting, setResetting] = useState(false);
+  const pc = PLAN_COLORS[org.plan] || PLAN_COLORS.trial;
+  const sc = STATUS_COLORS[org.status] || STATUS_COLORS.active;
+  const expires = org.subscription_expires_at
+    ? new Date(org.subscription_expires_at).toLocaleDateString()
+    : "—";
+  const expiring = org.subscription_expires_at &&
+    (new Date(org.subscription_expires_at) - Date.now()) < 30 * 86400000 &&
+    (new Date(org.subscription_expires_at) - Date.now()) > 0;
+
+  return (
+    <div style={{padding:"14px 20px",borderBottom:`1px solid ${C.border}`,display:"grid",gridTemplateColumns:"2fr 1fr 90px 80px 110px 60px 160px",gap:12,alignItems:"center",background:C.white,cursor:"pointer",transition:"background .1s"}}
+      onClick={()=>onSelect(org)}
+      onMouseOver={e=>e.currentTarget.style.background=C.light}
+      onMouseOut={e=>e.currentTarget.style.background=C.white}>
+      <div>
+        <p style={{fontSize:13,fontWeight:600,color:C.navy,margin:0}}>{org.name}</p>
+        <p style={{fontSize:11,color:C.muted,margin:0}}>{org.slug}</p>
+      </div>
+      <div style={{fontSize:12,color:C.dark}}>{org.users?.[0]?.name || "—"}</div>
+      <div>
+        <span style={{fontSize:10,padding:"3px 8px",borderRadius:99,background:pc.bg,color:pc.fg,fontWeight:700}}>{org.plan?.replace(/_/g," ")}</span>
+      </div>
+      <div>
+        <span style={{fontSize:10,padding:"3px 8px",borderRadius:99,background:sc.bg,color:sc.fg,fontWeight:700}}>{org.status}</span>
+      </div>
+      <div style={{fontSize:11,color:expiring?"#D97706":C.muted,fontWeight:expiring?700:400}}>
+        {expiring && "⚠ "}{expires}
+      </div>
+      <div style={{textAlign:"center"}}>
+        <span style={{fontSize:12,fontWeight:600,color:C.navy}}>{org.event_count||0}</span>
+        <span style={{fontSize:10,color:C.muted}}> events</span>
+      </div>
+      <div style={{display:"flex",gap:6}} onClick={e=>e.stopPropagation()}>
+        <select value={org.status} onChange={e=>onStatusChange(org.id, e.target.value)}
+          style={{padding:"4px 6px",border:`1px solid ${C.border}`,borderRadius:6,fontSize:11,fontFamily:F,cursor:"pointer",flex:1}}>
+          <option value="active">Active</option>
+          <option value="suspended">Suspended</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+        <button onClick={async()=>{ setResetting(true); await onResetPassword(org.id); setResetting(false); }}
+          disabled={resetting}
+          style={{padding:"4px 8px",background:C.ltblue,color:C.blue,border:`1px solid #BFDBFE`,borderRadius:6,fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:F,whiteSpace:"nowrap"}}>
+          {resetting?"…":"PW"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Main App ──────────────────────────────────────────────────────────────────
 export default function App() {
   const [user, setUser]           = useState(null);
@@ -586,19 +830,21 @@ export default function App() {
   const [stats, setStats]         = useState(null);
   const [customers, setCustomers] = useState([]);
   const [dataLoading, setDataLoading] = useState(false);
-  const [showCreate, setShowCreate] = useState(false);
-  const [selOrg, setSelOrg]       = useState(null);
-  const [pwResult, setPwResult]   = useState(null);
+  const [showCreate, setShowCreate]   = useState(false);
+  const [selOrg, setSelOrg]           = useState(null);
+  const [pwResult, setPwResult]       = useState(null);
+  const [activeTab, setActiveTab]     = useState("customers");
+  const [planConfigs, setPlanConfigs] = useState([]);
+  const [search, setSearch]           = useState("");
 
   useEffect(()=>{
     supabase.auth.getSession().then(({data:{session}})=>{
       if (session?.user) setUser(session.user);
       setLoading(false);
     });
-    supabase.auth.onAuthStateChange((_,session)=>{
-      setUser(session?.user || null);
-    });
+    supabase.auth.onAuthStateChange((_,session)=>{ setUser(session?.user || null); });
   },[]);
+
   useEffect(()=>{
     const s = document.createElement("style");
     s.textContent = "@keyframes spin { to { transform: rotate(360deg); } }";
@@ -609,15 +855,15 @@ export default function App() {
   const loadData = async () => {
     setDataLoading(true);
     try {
-      const [s, c] = await Promise.all([
+      const [s, c, pc] = await Promise.all([
         apiCall("/admin/stats"),
         apiCall("/admin/customers"),
+        apiCall("/admin/plan-configs"),
       ]);
       setStats(s);
       setCustomers(c);
-    } catch(e) {
-      console.error("Load failed:", e);
-    }
+      setPlanConfigs(pc);
+    } catch(e) { console.error("Load failed:", e); }
     setDataLoading(false);
   };
 
@@ -637,16 +883,43 @@ export default function App() {
     } catch(e) { alert("Failed: "+e.message); }
   };
 
+  const filteredCustomers = customers.filter(org => {
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return (org.name||"").toLowerCase().includes(q) ||
+           (org.slug||"").toLowerCase().includes(q) ||
+           (org.plan||"").toLowerCase().includes(q) ||
+           (org.users?.[0]?.name||"").toLowerCase().includes(q);
+  });
+
   if (loading) return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:F,color:C.muted}}>Loading…</div>;
   if (!user)   return <LoginScreen onLogin={setUser}/>;
+
+  const TABS = [
+    { id:"customers", label:"Customers" },
+    { id:"plans",     label:"Plans & Packages" },
+  ];
 
   return (
     <div style={{minHeight:"100vh",background:C.light,fontFamily:F}}>
       {/* Header */}
       <div style={{background:C.navy,padding:"0 32px",height:56,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-        <div style={{display:"flex",alignItems:"center",gap:16}}>
-          <img src="/Fingoh_Black.png" alt="Fingoh" style={{height:22,display:"block",filter:"brightness(0) invert(1)"}}/>
-          <span style={{fontSize:11,color:"rgba(255,255,255,0.4)",fontWeight:500}}>Super Admin</span>
+        <div style={{display:"flex",alignItems:"center",gap:24}}>
+          <div style={{display:"flex",alignItems:"center",gap:12}}>
+            <img src="/Fingoh_Black.png" alt="Fingoh" style={{height:22,display:"block",filter:"brightness(0) invert(1)"}}/>
+            <span style={{fontSize:11,color:"rgba(255,255,255,0.4)",fontWeight:500}}>Super Admin</span>
+          </div>
+          {/* Tab nav */}
+          {!selOrg && (
+            <div style={{display:"flex",gap:2}}>
+              {TABS.map(t => (
+                <button key={t.id} onClick={()=>setActiveTab(t.id)}
+                  style={{padding:"6px 16px",background:activeTab===t.id?"rgba(255,255,255,0.15)":"transparent",color:activeTab===t.id?"#fff":"rgba(255,255,255,0.5)",border:"none",borderRadius:6,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:F,transition:"all .1s"}}>
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
         <button onClick={()=>supabase.auth.signOut()}
           style={{padding:"6px 14px",background:"rgba(255,255,255,0.1)",color:"rgba(255,255,255,0.7)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:6,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:F}}>
@@ -656,84 +929,106 @@ export default function App() {
 
       <div style={{padding:"28px 32px",maxWidth:1200,margin:"0 auto"}}>
         {selOrg ? (
-          <CustomerDetail orgId={selOrg.id} onBack={()=>setSelOrg(null)}/>
-        ) : (<>
-        {/* Stats */}
-        {stats && (
-          <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:12,marginBottom:28}}>
-            <StatCard val={stats.total_customers}  label="Total customers" color={C.navy}/>
-            <StatCard val={stats.active_customers} label="Active"          color={C.green}/>
-            <StatCard val={stats.total_users}      label="Total users"     color={C.blue}/>
-            <StatCard val={stats.total_events}     label="Events created"  color={C.amber}/>
-            <StatCard val={stats.total_contacts}   label="Total contacts"  color="#8B5CF6"/>
-          </div>
-        )}
+          <CustomerDetail orgId={selOrg.id} onBack={()=>setSelOrg(null)} planConfigs={planConfigs}/>
+        ) : activeTab === "plans" ? (
+          <PlansConfigScreen/>
+        ) : (
+          <>
+            {/* Stats */}
+            {stats && (
+              <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:12,marginBottom:28}}>
+                <StatCard val={stats.total_customers}  label="Total customers" color={C.navy}/>
+                <StatCard val={stats.active_customers} label="Active"          color={C.green}/>
+                <StatCard val={stats.total_users}      label="Total users"     color={C.blue}/>
+                <StatCard val={stats.total_events}     label="Events created"  color={C.amber}/>
+                <StatCard val={stats.total_contacts}   label="Total contacts"  color={C.purple}/>
+              </div>
+            )}
 
-        {/* Customers table */}
-        <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,overflow:"hidden"}}>
-          <div style={{padding:"14px 20px",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <div>
-              <h2 style={{fontSize:15,fontWeight:700,color:C.navy,margin:0}}>Customers</h2>
-              <p style={{fontSize:11,color:C.muted,margin:0}}>{customers.length} organisations</p>
-            </div>
-            <div style={{display:"flex",gap:8}}>
-              <button onClick={loadData}
-                style={{padding:"7px 14px",background:C.white,color:C.navy,border:`1px solid ${C.border}`,borderRadius:8,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:F}}>
-                ↻ Refresh
-              </button>
-              <button onClick={()=>setShowCreate(true)}
-                style={{padding:"7px 16px",background:C.navy,color:C.white,border:"none",borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:F}}>
-                + New Customer
-              </button>
-            </div>
-          </div>
-          {/* Table header */}
-          <div style={{padding:"8px 20px",display:"grid",gridTemplateColumns:"2fr 1fr 80px 80px 100px 60px 160px",gap:12,background:"#F8FAFC",borderBottom:`1px solid ${C.border}`}}>
-            {["Company","Admin","Plan","Status","Expires","Events","Actions"].map(h=>(
-              <div key={h} style={{fontSize:10,fontWeight:600,color:C.muted,textAlign:["Events"].includes(h)?"center":"left"}}>{h}</div>
-            ))}
-          </div>
-          {dataLoading ? (
-            <div style={{padding:40,textAlign:"center",color:C.muted,fontSize:13}}>
-              <div style={{width:24,height:24,border:`2px solid #E2E8F0`,borderTop:`2px solid ${C.navy}`,borderRadius:"50%",animation:"spin .8s linear infinite",margin:"0 auto 12px"}}/>
-              Loading customers…
-            </div>
-          ) : customers.length===0 ? (
-            <div style={{padding:40,textAlign:"center",color:C.muted,fontSize:13}}>No customers yet — create your first one</div>
-          ) : customers.map(org=>(
-            <CustomerRow key={org.id} org={org}
-              onSelect={setSelOrg}
-              onStatusChange={handleStatusChange}
-              onResetPassword={handleResetPassword}
-            />
-          ))}
-        </div>
+            {/* Expiring soon banner */}
+            {customers.filter(c => c.subscription_expires_at && (new Date(c.subscription_expires_at) - Date.now()) < 30*86400000 && (new Date(c.subscription_expires_at) - Date.now()) > 0).length > 0 && (
+              <div style={{background:"#FFFBEB",border:"1px solid #FDE68A",borderRadius:10,padding:"12px 18px",marginBottom:16,display:"flex",alignItems:"center",gap:10}}>
+                <span style={{fontSize:16}}>⚠️</span>
+                <span style={{fontSize:13,color:"#92400E",fontWeight:600}}>
+                  {customers.filter(c => c.subscription_expires_at && (new Date(c.subscription_expires_at) - Date.now()) < 30*86400000 && (new Date(c.subscription_expires_at) - Date.now()) > 0).length} customer(s) expiring in the next 30 days
+                </span>
+              </div>
+            )}
 
-        {/* Plan breakdown */}
-        {stats && (
-          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginTop:16}}>
-            {PLANS.filter(p=>!p.id.includes("legacy") && (stats.plans[p.id]||0) > 0 || ["single_event","event_bundle","annual_self_serve"].includes(p.id)).map(p=>{
-              const count = stats.plans[p.id]||0;
-              const pc = PLAN_COLORS[p.id]||PLAN_COLORS.trial;
-              return (
-                <div key={p.id} style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:10,padding:"14px 18px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                  <div>
-                    <p style={{fontSize:12,color:C.dark,fontWeight:600,margin:0}}>{p.label}</p>
-                    <p style={{fontSize:10,color:C.muted,margin:0}}>{p.description}</p>
-                  </div>
-                  <span style={{fontSize:16,fontWeight:700,padding:"4px 12px",borderRadius:99,background:pc.bg,color:pc.fg,flexShrink:0,marginLeft:8}}>{count}</span>
+            {/* Customers table */}
+            <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,overflow:"hidden"}}>
+              <div style={{padding:"14px 20px",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",gap:12}}>
+                <div>
+                  <h2 style={{fontSize:15,fontWeight:700,color:C.navy,margin:0}}>Customers</h2>
+                  <p style={{fontSize:11,color:C.muted,margin:0}}>{filteredCustomers.length} of {customers.length} organisations</p>
                 </div>
-              );
-            })}
-          </div>
+                <div style={{display:"flex",gap:8,alignItems:"center",flex:1,maxWidth:360}}>
+                  <input value={search} onChange={e=>setSearch(e.target.value)}
+                    placeholder="Search company, plan, admin…"
+                    style={{flex:1,padding:"7px 12px",border:`1px solid ${C.border}`,borderRadius:8,fontSize:12,fontFamily:F,outline:"none"}}/>
+                </div>
+                <div style={{display:"flex",gap:8}}>
+                  <button onClick={loadData}
+                    style={{padding:"7px 14px",background:C.white,color:C.navy,border:`1px solid ${C.border}`,borderRadius:8,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:F}}>
+                    ↻ Refresh
+                  </button>
+                  <button onClick={()=>setShowCreate(true)}
+                    style={{padding:"7px 16px",background:C.navy,color:C.white,border:"none",borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:F}}>
+                    + New Customer
+                  </button>
+                </div>
+              </div>
+              <div style={{padding:"8px 20px",display:"grid",gridTemplateColumns:"2fr 1fr 90px 80px 110px 60px 160px",gap:12,background:"#F8FAFC",borderBottom:`1px solid ${C.border}`}}>
+                {["Company","Admin","Plan","Status","Expires","Events","Actions"].map(h=>(
+                  <div key={h} style={{fontSize:10,fontWeight:600,color:C.muted,textTransform:"uppercase"}}>{h}</div>
+                ))}
+              </div>
+              {dataLoading ? (
+                <div style={{padding:40,textAlign:"center",color:C.muted,fontSize:13}}>
+                  <div style={{width:24,height:24,border:`2px solid #E2E8F0`,borderTop:`2px solid ${C.navy}`,borderRadius:"50%",animation:"spin .8s linear infinite",margin:"0 auto 12px"}}/>
+                  Loading customers…
+                </div>
+              ) : filteredCustomers.length===0 ? (
+                <div style={{padding:40,textAlign:"center",color:C.muted,fontSize:13}}>
+                  {search ? "No customers match your search." : "No customers yet — create your first one"}
+                </div>
+              ) : filteredCustomers.map(org=>(
+                <CustomerRow key={org.id} org={org}
+                  onSelect={setSelOrg}
+                  onStatusChange={handleStatusChange}
+                  onResetPassword={handleResetPassword}
+                />
+              ))}
+            </div>
+
+            {/* Plan distribution */}
+            {stats && (
+              <div style={{marginTop:16}}>
+                <h3 style={{fontSize:12,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:.06,margin:"0 0 10px 0"}}>Plan distribution</h3>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:10}}>
+                  {planConfigs.filter(p=>p.is_active && !["starter","pro","enterprise"].includes(p.plan_id)).map(p=>{
+                    const count = stats.plans?.[p.plan_id]||0;
+                    const pc = PLAN_COLORS[p.plan_id]||PLAN_COLORS.trial;
+                    return (
+                      <div key={p.plan_id} style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:10,padding:"12px 14px",textAlign:"center"}}>
+                        <div style={{fontSize:22,fontWeight:800,color:pc.fg}}>{count}</div>
+                        <div style={{fontSize:10,fontWeight:600,color:pc.fg,marginTop:2}}>{p.label}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </>
         )}
-        </>)}
       </div>
-       {/* Modals */}
+
+      {/* Modals */}
       {showCreate && (
         <CreateCustomerModal
           onClose={()=>setShowCreate(false)}
           onCreated={()=>{ loadData(); }}
+          planConfigs={planConfigs}
         />
       )}
 
