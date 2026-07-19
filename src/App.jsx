@@ -911,7 +911,7 @@ function CustomerDetail({ orgId, onBack, planConfigs }) {
                 {[
                   ["Plan",       org.plan],
                   ["Status",     org.status],
-                  ["Max Events", org.max_events],
+                  ["Max Events", org.extra_events_addons > 0 ? `${org.effective_max_events} (${org.max_events} plan + ${org.extra_events_addons} add-on)` : org.max_events],
                   ["Expires",    org.subscription_expires_at ? new Date(org.subscription_expires_at).toLocaleDateString() : "—"],
                   ["Notes",      org.admin_notes||"—"],
                 ].map(([k,v])=>(
