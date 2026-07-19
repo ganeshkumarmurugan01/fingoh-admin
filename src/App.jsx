@@ -99,6 +99,13 @@ function LoginScreen({ onLogin }) {
   );
 }
 
+// ── AI cost estimate helper ───────────────────────────────────────────────────
+function aiCostEstimate(maxContacts, maxDeepIei) {
+  const enrichCost  = (maxContacts  || 0) * 0.006;   // Sonnet enrichment per contact
+  const deepCost    = (maxDeepIei   || 0) * 0.021;   // Deep IEI research per contact
+  return (enrichCost + deepCost).toFixed(2);
+}
+
 // ── Plan feature card (read-only preview) ─────────────────────────────────────
 function PlanFeatureCard({ config, compact = false }) {
   if (!config) return null;
@@ -126,9 +133,10 @@ function PlanFeatureCard({ config, compact = false }) {
           ))}
           {features.length > 4 && <span style={{fontSize:10,color:C.muted}}>+{features.length-4} more</span>}
         </div>
-        <div style={{display:"flex",gap:12,fontSize:10,color:C.muted}}>
+        <div style={{display:"flex",gap:10,fontSize:10,color:C.muted,flexWrap:"wrap"}}>
           <span>📅 {config.max_events >= 999 ? "Unlimited events" : `${config.max_events} event${config.max_events>1?"s":""}`}</span>
-          <span>👥 {config.max_staff_seats >= 999 ? "Unlimited staff" : `${config.max_staff_seats} staff seats`}</span>
+          <span>👤 {config.max_contacts_per_event >= 9999 ? "Unlimited" : (config.max_contacts_per_event||0).toLocaleString()} contacts/ev</span>
+          <span style={{color:C.purple}}>⚡ {config.max_deep_iei_per_event >= 9999 ? "Unlimited" : config.max_deep_iei_per_event} deep IEI/ev</span>
           <span>🎧 {SUPPORT_LABELS[config.support_level] || config.support_level}</span>
         </div>
       </div>
@@ -152,19 +160,32 @@ function PlanFeatureCard({ config, compact = false }) {
           )}
         </div>
       )}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:12,padding:"10px 12px",background:C.light,borderRadius:8}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8,marginBottom:12,padding:"10px 12px",background:C.light,borderRadius:8}}>
         <div style={{textAlign:"center"}}>
-          <div style={{fontSize:16,fontWeight:800,color:C.navy}}>{config.max_events >= 999 ? "∞" : config.max_events}</div>
+          <div style={{fontSize:15,fontWeight:800,color:C.navy}}>{config.max_events >= 999 ? "∞" : config.max_events}</div>
           <div style={{fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:.05}}>Events</div>
         </div>
         <div style={{textAlign:"center"}}>
-          <div style={{fontSize:16,fontWeight:800,color:C.navy}}>{config.max_staff_seats >= 999 ? "∞" : config.max_staff_seats}</div>
-          <div style={{fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:.05}}>Staff Seats</div>
+          <div style={{fontSize:15,fontWeight:800,color:C.navy}}>{config.max_contacts_per_event >= 9999 ? "∞" : (config.max_contacts_per_event||"—").toLocaleString()}</div>
+          <div style={{fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:.05}}>Contacts/ev</div>
+        </div>
+        <div style={{textAlign:"center"}}>
+          <div style={{fontSize:15,fontWeight:800,color:C.purple}}>{config.max_deep_iei_per_event >= 9999 ? "∞" : (config.max_deep_iei_per_event||"—")}</div>
+          <div style={{fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:.05}}>Deep IEI/ev</div>
+        </div>
+        <div style={{textAlign:"center"}}>
+          <div style={{fontSize:15,fontWeight:800,color:C.navy}}>{config.max_staff_seats >= 999 ? "∞" : config.max_staff_seats}</div>
+          <div style={{fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:.05}}>Staff seats</div>
         </div>
         <div style={{textAlign:"center"}}>
           <div style={{fontSize:11,fontWeight:700,color:C.navy}}>{SUPPORT_LABELS[config.support_level] || config.support_level}</div>
           <div style={{fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:.05}}>Support</div>
         </div>
+      </div>
+      {/* AI cost indicator */}
+      <div style={{fontSize:10,color:C.muted,background:"#F8FAFC",borderRadius:6,padding:"6px 10px",marginBottom:8}}>
+        Est. max AI cost/event: <strong style={{color:C.dark}}>${aiCostEstimate(config.max_contacts_per_event, config.max_deep_iei_per_event)}</strong>
+        <span style={{marginLeft:8,color:"#94A3B8"}}>({config.max_contacts_per_event} contacts × $0.006 + {config.max_deep_iei_per_event} deep × $0.021)</span>
       </div>
       <div style={{display:"flex",flexDirection:"column",gap:4}}>
         {features.map((f,i) => (
@@ -283,6 +304,25 @@ function PlansConfigScreen() {
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
                     <div><label style={lS}>Max Events</label><input type="number" value={editForm.max_events||1} onChange={e=>setEditForm(f=>({...f,max_events:e.target.value}))} style={iS}/></div>
                     <div><label style={lS}>Staff Seats</label><input type="number" value={editForm.max_staff_seats||3} onChange={e=>setEditForm(f=>({...f,max_staff_seats:e.target.value}))} style={iS}/></div>
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                    <div>
+                      <label style={lS}>Max Contacts / Event</label>
+                      <input type="number" value={editForm.max_contacts_per_event||500} onChange={e=>setEditForm(f=>({...f,max_contacts_per_event:e.target.value}))} style={iS}/>
+                      <p style={{fontSize:9,color:C.muted,margin:"3px 0 0 0"}}>Upload cap enforced at CSV import</p>
+                    </div>
+                    <div>
+                      <label style={lS}>Max Deep IEI / Event</label>
+                      <input type="number" value={editForm.max_deep_iei_per_event||50} onChange={e=>setEditForm(f=>({...f,max_deep_iei_per_event:e.target.value}))} style={iS}/>
+                      <p style={{fontSize:9,color:C.muted,margin:"3px 0 0 0"}}>Deep research AI analysis cap</p>
+                    </div>
+                  </div>
+                  {/* Live cost estimate */}
+                  <div style={{background:"#F0FDF4",border:"1px solid #86EFAC",borderRadius:8,padding:"10px 12px",fontSize:11}}>
+                    <strong style={{color:"#14532D"}}>Est. max AI cost/event: ${aiCostEstimate(editForm.max_contacts_per_event, editForm.max_deep_iei_per_event)}</strong>
+                    <div style={{color:"#166534",marginTop:3,fontSize:10}}>
+                      {editForm.max_contacts_per_event||0} contacts × $0.006 (Sonnet enrichment) + {editForm.max_deep_iei_per_event||0} deep IEI × $0.021 (research)
+                    </div>
                   </div>
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
                     <div><label style={lS}>Price (₹ INR)</label><input type="number" value={editForm.price_inr||""} onChange={e=>setEditForm(f=>({...f,price_inr:e.target.value}))} style={iS} placeholder="0 for free"/></div>
