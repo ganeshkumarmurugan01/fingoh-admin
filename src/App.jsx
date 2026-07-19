@@ -205,6 +205,75 @@ function PlanFeatureCard({ config, compact = false }) {
   );
 }
 
+// ── Add-on Catalog Editor ─────────────────────────────────────────────────────
+function AddonCatalogSection() {
+  const [catalog, setCatalog] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState(null);
+  const [editForm, setEditForm] = useState({});
+  const [saving, setSaving]   = useState(false);
+
+  const load = useCallback(() => {
+    apiCall("/admin/addon-catalog").then(d => { setCatalog(d); setLoading(false); }).catch(()=>setLoading(false));
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await apiCall(`/admin/addon-catalog/${editing}`, { method:"PUT", body:JSON.stringify({...editForm, quantity:parseInt(editForm.quantity)||0, price_inr:editForm.price_inr?parseInt(editForm.price_inr):null, price_usd:editForm.price_usd?parseInt(editForm.price_usd):null}) });
+      setEditing(null); load();
+    } catch(e) { alert("Save failed: "+e.message); }
+    setSaving(false);
+  };
+
+  const TYPE_COLORS = { extra_events:{bg:"#EFF6FF",fg:"#1E3A8A"}, extra_contacts:{bg:"#F0FDF4",fg:"#065F46"} };
+
+  if (loading) return <div style={{fontSize:12,color:C.muted}}>Loading add-ons…</div>;
+
+  return (
+    <div style={{marginTop:32}}>
+      <div style={{marginBottom:14}}>
+        <h3 style={{fontSize:14,fontWeight:700,color:C.navy,margin:0}}>Add-on Catalog</h3>
+        <p style={{fontSize:12,color:C.muted,margin:"4px 0 0 0"}}>Available add-ons customers can purchase. Assign to a customer from their profile.</p>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12}}>
+        {catalog.map(a => {
+          const tc = TYPE_COLORS[a.addon_type] || TYPE_COLORS.extra_events;
+          return editing === a.addon_id ? (
+            <div key={a.addon_id} style={{background:C.white,border:`2px solid ${C.blue}`,borderRadius:10,padding:14}}>
+              <div style={{display:"flex",gap:6,marginBottom:10}}>
+                <button onClick={()=>setEditing(null)} style={{flex:1,padding:"4px 8px",background:C.white,color:C.muted,border:`1px solid ${C.border}`,borderRadius:6,fontSize:11,cursor:"pointer",fontFamily:F}}>Cancel</button>
+                <button onClick={handleSave} disabled={saving} style={{flex:1,padding:"4px 8px",background:C.navy,color:C.white,border:"none",borderRadius:6,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:F}}>{saving?"…":"Save"}</button>
+              </div>
+              {[["Label","label","text"],["Description","description","text"],["Quantity","quantity","number"],["Price ₹","price_inr","number"],["Price $","price_usd","number"]].map(([lbl,field,type])=>(
+                <div key={field} style={{marginBottom:8}}>
+                  <label style={{...lS,marginBottom:3}}>{lbl}</label>
+                  <input type={type} value={editForm[field]||""} onChange={e=>setEditForm(f=>({...f,[field]:e.target.value}))} style={{...iS,padding:"5px 8px",fontSize:11}}/>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div key={a.addon_id} style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:10,padding:14,position:"relative",opacity:a.is_active?1:0.5}}>
+              <span style={{fontSize:9,padding:"2px 7px",borderRadius:99,background:tc.bg,color:tc.fg,fontWeight:700,textTransform:"uppercase"}}>{a.addon_type.replace(/_/g," ")}</span>
+              <div style={{fontSize:13,fontWeight:700,color:C.navy,margin:"8px 0 2px"}}>{a.label}</div>
+              <div style={{fontSize:11,color:C.muted,marginBottom:8,lineHeight:1.4}}>{a.description}</div>
+              <div style={{display:"flex",gap:8,fontSize:11,color:C.dark}}>
+                {a.price_inr != null && <span style={{fontWeight:700}}>₹{a.price_inr?.toLocaleString()}</span>}
+                {a.price_usd != null && <span style={{color:C.muted}}>${a.price_usd}</span>}
+              </div>
+              <button onClick={()=>{setEditing(a.addon_id);setEditForm(a);}}
+                style={{position:"absolute",top:10,right:10,padding:"2px 8px",background:"none",color:C.muted,border:`1px solid ${C.border}`,borderRadius:5,fontSize:10,cursor:"pointer",fontFamily:F}}>
+                Edit
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ── Plans Config Screen ───────────────────────────────────────────────────────
 function PlansConfigScreen() {
   const [configs, setConfigs]   = useState([]);
@@ -365,6 +434,7 @@ function PlansConfigScreen() {
           </div>
         ))}
       </div>
+      <AddonCatalogSection/>
     </div>
   );
 }
@@ -526,6 +596,141 @@ function ActivityLog({ orgId }) {
 }
 
 // ── Customer Detail ───────────────────────────────────────────────────────────
+// ── Org Add-ons Section ───────────────────────────────────────────────────────
+function OrgAddonsSection({ orgId, events }) {
+  const [addons, setAddons]     = useState([]);
+  const [catalog, setCatalog]   = useState([]);
+  const [loading, setLoading]   = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm]         = useState({ addon_catalog_id:"", event_id:"", notes:"" });
+  const [adding, setAdding]     = useState(false);
+
+  const load = useCallback(() => {
+    Promise.all([
+      apiCall(`/admin/customers/${orgId}/addons`),
+      apiCall("/admin/addon-catalog"),
+    ]).then(([a, c]) => { setAddons(a); setCatalog(c.filter(x=>x.is_active)); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [orgId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const selectedCatalog = catalog.find(c => c.addon_id === form.addon_catalog_id);
+  const needsEvent = selectedCatalog?.addon_type === "extra_contacts";
+
+  const handleAdd = async () => {
+    if (!form.addon_catalog_id) return;
+    setAdding(true);
+    try {
+      const payload = {
+        addon_catalog_id: form.addon_catalog_id,
+        addon_type: selectedCatalog.addon_type,
+        quantity: selectedCatalog.quantity,
+        notes: form.notes || null,
+        event_id: needsEvent && form.event_id ? form.event_id : null,
+      };
+      await apiCall(`/admin/customers/${orgId}/addons`, { method:"POST", body:JSON.stringify(payload) });
+      setForm({ addon_catalog_id:"", event_id:"", notes:"" });
+      setShowForm(false);
+      load();
+    } catch(e) { alert("Failed: "+e.message); }
+    setAdding(false);
+  };
+
+  const handleRemove = async (addonRowId) => {
+    if (!window.confirm("Remove this add-on?")) return;
+    try {
+      await apiCall(`/admin/customers/${orgId}/addons/${addonRowId}`, { method:"DELETE" });
+      load();
+    } catch(e) { alert("Failed: "+e.message); }
+  };
+
+  const TYPE_COLORS = {
+    extra_events:   { bg:"#EFF6FF", fg:"#1E3A8A" },
+    extra_contacts: { bg:"#F0FDF4", fg:"#065F46" },
+  };
+
+  return (
+    <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:12,padding:24,marginBottom:16}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+        <h3 style={{fontSize:14,fontWeight:700,color:C.navy,margin:0}}>Add-ons</h3>
+        <button onClick={()=>setShowForm(s=>!s)}
+          style={{padding:"5px 12px",background:C.navy,color:C.white,border:"none",borderRadius:6,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:F}}>
+          {showForm ? "Cancel" : "+ Assign Add-on"}
+        </button>
+      </div>
+
+      {showForm && (
+        <div style={{background:"#F8FAFC",border:`1px solid ${C.border}`,borderRadius:8,padding:16,marginBottom:16}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr auto",gap:10,alignItems:"end"}}>
+            <div>
+              <label style={lS}>Add-on *</label>
+              <select value={form.addon_catalog_id} onChange={e=>setForm(f=>({...f,addon_catalog_id:e.target.value,event_id:""}))} style={iS}>
+                <option value="">Select add-on…</option>
+                {catalog.map(c=>(
+                  <option key={c.addon_id} value={c.addon_id}>{c.label} (₹{c.price_inr?.toLocaleString()})</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label style={lS}>Event {needsEvent ? "*" : "(optional)"}</label>
+              <select value={form.event_id} onChange={e=>setForm(f=>({...f,event_id:e.target.value}))} style={iS} disabled={!needsEvent}>
+                <option value="">All events / N/A</option>
+                {events.map(ev=><option key={ev.id} value={ev.id}>{ev.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={lS}>Notes</label>
+              <input value={form.notes} onChange={e=>setForm(f=>({...f,notes:e.target.value}))} style={iS} placeholder="e.g. promo, request ID…"/>
+            </div>
+            <button onClick={handleAdd} disabled={adding||!form.addon_catalog_id||(needsEvent&&!form.event_id)}
+              style={{padding:"8px 16px",background:C.navy,color:C.white,border:"none",borderRadius:6,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:F,whiteSpace:"nowrap"}}>
+              {adding?"Adding…":"Assign"}
+            </button>
+          </div>
+          {selectedCatalog && needsEvent && !form.event_id && (
+            <p style={{fontSize:11,color:C.red,margin:"8px 0 0 0"}}>⚠ Extra contacts must be linked to a specific event.</p>
+          )}
+        </div>
+      )}
+
+      {loading ? <div style={{fontSize:12,color:C.muted}}>Loading…</div>
+      : addons.length === 0
+        ? <p style={{fontSize:12,color:C.muted,margin:0}}>No add-ons assigned to this customer.</p>
+        : (
+          <div>
+            {addons.map(a => {
+              const tc = TYPE_COLORS[a.addon_type] || TYPE_COLORS.extra_events;
+              const ev = events.find(e=>e.id===a.event_id);
+              return (
+                <div key={a.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:`1px solid ${C.border}`}}>
+                  <div style={{display:"flex",alignItems:"center",gap:10}}>
+                    <span style={{fontSize:9,padding:"2px 7px",borderRadius:99,background:tc.bg,color:tc.fg,fontWeight:700,textTransform:"uppercase"}}>{a.addon_type.replace(/_/g," ")}</span>
+                    <div>
+                      <p style={{fontSize:12,fontWeight:700,color:C.navy,margin:0}}>
+                        +{a.quantity} {a.addon_type === "extra_events" ? "event(s)" : "contacts"}
+                      </p>
+                      {ev && <p style={{fontSize:11,color:C.muted,margin:"1px 0 0 0"}}>Event: {ev.name}</p>}
+                      {a.notes && <p style={{fontSize:11,color:C.muted,margin:"1px 0 0 0"}}>{a.notes}</p>}
+                    </div>
+                  </div>
+                  <div style={{display:"flex",alignItems:"center",gap:12}}>
+                    <span style={{fontSize:11,color:C.muted}}>{new Date(a.created_at).toLocaleDateString()}</span>
+                    <button onClick={()=>handleRemove(a.id)}
+                      style={{padding:"4px 10px",background:C.ltred,color:C.red,border:"1px solid #FECACA",borderRadius:6,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:F}}>
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )
+      }
+    </div>
+  );
+}
+
 function CustomerDetail({ orgId, onBack, planConfigs }) {
   const [org, setOrg]         = useState(null);
   const [loading, setLoading] = useState(true);
@@ -727,6 +932,9 @@ function CustomerDetail({ orgId, onBack, planConfigs }) {
             </div>
         }
       </div>
+
+      {/* Add-ons */}
+      <OrgAddonsSection orgId={orgId} events={org.events||[]}/>
 
       {/* Activity Log */}
       <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:12,padding:24,marginBottom:16}}>
