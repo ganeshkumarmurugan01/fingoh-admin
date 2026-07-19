@@ -206,124 +206,132 @@ function PlanFeatureCard({ config, compact = false }) {
 }
 
 // ── Add-on Catalog Editor ─────────────────────────────────────────────────────
-const EMPTY_ADDON = { addon_id:"", label:"", addon_type:"extra_contacts", quantity:"", price_inr:"", price_usd:"", description:"", is_active:true };
+const ADDON_GROUPS = [
+  { key:"extra_events",   label:"Extra Events",        color:{bg:"#EFF6FF",fg:"#1E3A8A"} },
+  { key:"extra_contacts", label:"Extra Contacts",       color:{bg:"#F0FDF4",fg:"#065F46"} },
+  { key:"extra_deep_iei", label:"Deep IEI Analysis",   color:{bg:"#FDF4FF",fg:"#6B21A8"} },
+];
 
 function AddonCatalogSection() {
   const [catalog, setCatalog]   = useState([]);
   const [loading, setLoading]   = useState(true);
-  const [editing, setEditing]   = useState(null); // addon_id or "new"
-  const [editForm, setEditForm] = useState({});
-  const [saving, setSaving]     = useState(false);
+  const [prices, setPrices]     = useState({}); // { addon_id: {price_inr, price_usd} }
+  const [saving, setSaving]     = useState(null); // addon_id currently saving
 
   const load = useCallback(() => {
-    apiCall("/admin/addon-catalog").then(d => { setCatalog(d); setLoading(false); }).catch(()=>setLoading(false));
+    apiCall("/admin/addon-catalog").then(d => {
+      setCatalog(d);
+      const init = {};
+      d.forEach(a => { init[a.addon_id] = { price_inr: a.price_inr ?? "", price_usd: a.price_usd ?? "" }; });
+      setPrices(init);
+      setLoading(false);
+    }).catch(() => setLoading(false));
   }, []);
   useEffect(() => { load(); }, [load]);
 
-  const buildPayload = (f) => ({
-    ...f,
-    quantity:  parseInt(f.quantity)  || 0,
-    price_inr: f.price_inr ? parseInt(f.price_inr) : null,
-    price_usd: f.price_usd ? parseInt(f.price_usd) : null,
-  });
-
-  const handleSave = async () => {
-    if (!editForm.label || !editForm.quantity) { alert("Label and Quantity are required."); return; }
-    setSaving(true);
+  const handleSavePrice = async (addon) => {
+    setSaving(addon.addon_id);
     try {
-      if (editing === "new") {
-        if (!editForm.addon_id) { alert("Add-on ID is required (e.g. extra_contacts_200)"); setSaving(false); return; }
-        await apiCall(`/admin/addon-catalog/${editForm.addon_id}`, { method:"PUT", body:JSON.stringify(buildPayload(editForm)) });
-      } else {
-        await apiCall(`/admin/addon-catalog/${editing}`, { method:"PUT", body:JSON.stringify(buildPayload(editForm)) });
-      }
-      setEditing(null); load();
-    } catch(e) { alert("Save failed: "+e.message); }
-    setSaving(false);
+      const p = prices[addon.addon_id] || {};
+      await apiCall(`/admin/addon-catalog/${addon.addon_id}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          ...addon,
+          price_inr: p.price_inr !== "" ? parseInt(p.price_inr) : null,
+          price_usd: p.price_usd !== "" ? parseInt(p.price_usd) : null,
+        }),
+      });
+      load();
+    } catch(e) { alert("Save failed: " + e.message); }
+    setSaving(null);
   };
 
-  const TC = { extra_events:{bg:"#EFF6FF",fg:"#1E3A8A"}, extra_contacts:{bg:"#F0FDF4",fg:"#065F46"} };
-
-  const AddonForm = () => (
-    <div style={{background:C.white,border:`2px solid ${C.blue}`,borderRadius:10,padding:16}}>
-      <div style={{fontSize:12,fontWeight:700,color:C.navy,marginBottom:12}}>{editing==="new"?"New Add-on":"Edit Add-on"}</div>
-      {editing === "new" && (
-        <div style={{marginBottom:8}}>
-          <label style={lS}>Add-on ID <span style={{color:C.red}}>*</span></label>
-          <input value={editForm.addon_id||""} onChange={e=>setEditForm(f=>({...f,addon_id:e.target.value.toLowerCase().replace(/\s+/g,"_")}))}
-            style={{...iS,fontSize:11}} placeholder="e.g. extra_contacts_200"/>
-          <p style={{fontSize:9,color:C.muted,margin:"3px 0 0 0"}}>Lowercase, underscores only. Cannot change after save.</p>
-        </div>
-      )}
-      {[["Label","label","text"],["Description","description","text"]].map(([lbl,field,type])=>(
-        <div key={field} style={{marginBottom:8}}>
-          <label style={lS}>{lbl}</label>
-          <input type={type} value={editForm[field]||""} onChange={e=>setEditForm(f=>({...f,[field]:e.target.value}))} style={{...iS,fontSize:11}}/>
-        </div>
-      ))}
-      <div style={{marginBottom:8}}>
-        <label style={lS}>Type</label>
-        <select value={editForm.addon_type||"extra_contacts"} onChange={e=>setEditForm(f=>({...f,addon_type:e.target.value}))} style={{...iS,fontSize:11}}>
-          <option value="extra_contacts">Extra Contacts</option>
-          <option value="extra_events">Extra Events</option>
-        </select>
-      </div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:12}}>
-        {[["Quantity","quantity","number"],["Price ₹","price_inr","number"],["Price $","price_usd","number"]].map(([lbl,field,type])=>(
-          <div key={field}>
-            <label style={lS}>{lbl}</label>
-            <input type={type} value={editForm[field]||""} onChange={e=>setEditForm(f=>({...f,[field]:e.target.value}))} style={{...iS,fontSize:11}}/>
-          </div>
-        ))}
-      </div>
-      <div style={{display:"flex",gap:8}}>
-        <button onClick={()=>setEditing(null)} style={{flex:1,padding:"7px 0",background:C.white,color:C.muted,border:`1px solid ${C.border}`,borderRadius:6,fontSize:11,cursor:"pointer",fontFamily:F}}>Cancel</button>
-        <button onClick={handleSave} disabled={saving} style={{flex:2,padding:"7px 0",background:C.navy,color:C.white,border:"none",borderRadius:6,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:F}}>{saving?"Saving…":"Save Add-on"}</button>
-      </div>
-    </div>
-  );
+  const handleReset = async () => {
+    if (!window.confirm("Reset add-on catalog to defaults? Prices will be reset.")) return;
+    try {
+      await apiCall("/admin/addon-catalog/reset-defaults", { method:"POST" });
+      load();
+    } catch(e) { alert("Reset failed: " + e.message); }
+  };
 
   if (loading) return <div style={{fontSize:12,color:C.muted,padding:"32px 0"}}>Loading add-ons…</div>;
 
   return (
     <div style={{marginTop:40,borderTop:`2px solid ${C.border}`,paddingTop:32}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:24}}>
         <div>
           <h3 style={{fontSize:16,fontWeight:700,color:C.navy,margin:0}}>Add-on Catalog</h3>
-          <p style={{fontSize:12,color:C.muted,margin:"4px 0 0 0"}}>Add-ons customers can purchase on top of their plan. Assign from the customer profile.</p>
+          <p style={{fontSize:12,color:C.muted,margin:"4px 0 0 0"}}>
+            Pre-built add-ons customers can purchase on top of their plan. Edit prices as needed.
+          </p>
         </div>
-        {editing !== "new" && (
-          <button onClick={()=>{setEditing("new");setEditForm({...EMPTY_ADDON});}}
-            style={{padding:"7px 16px",background:C.navy,color:C.white,border:"none",borderRadius:8,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:F}}>
-            + New Add-on
-          </button>
-        )}
+        <button onClick={handleReset}
+          style={{padding:"7px 14px",background:C.white,color:C.muted,border:`1px solid ${C.border}`,borderRadius:8,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:F}}>
+          ↺ Reset to defaults
+        </button>
       </div>
 
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:14}}>
-        {editing === "new" && <AddonForm/>}
-        {catalog.map(a => {
-          const tc = TC[a.addon_type] || TC.extra_contacts;
-          return editing === a.addon_id
-            ? <AddonForm key={a.addon_id}/>
-            : (
-              <div key={a.addon_id} style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:10,padding:16,position:"relative",opacity:a.is_active?1:0.45}}>
-                <span style={{display:"inline-block",fontSize:9,padding:"2px 8px",borderRadius:99,background:tc.bg,color:tc.fg,fontWeight:700,textTransform:"uppercase",marginBottom:10}}>
-                  {a.addon_type.replace(/_/g," ")}
+      <div style={{display:"flex",flexDirection:"column",gap:24}}>
+        {ADDON_GROUPS.map(group => {
+          const items = catalog.filter(a => a.addon_type === group.key);
+          if (!items.length) return null;
+          return (
+            <div key={group.key}>
+              <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+                <span style={{fontSize:10,padding:"3px 10px",borderRadius:99,background:group.color.bg,color:group.color.fg,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.05em"}}>
+                  {group.label}
                 </span>
-                <div style={{fontSize:13,fontWeight:700,color:C.navy,marginBottom:3}}>{a.label}</div>
-                {a.description && <div style={{fontSize:11,color:C.muted,marginBottom:10,lineHeight:1.5}}>{a.description}</div>}
-                <div style={{display:"flex",gap:10,alignItems:"baseline",marginBottom:12}}>
-                  {a.price_inr != null && <span style={{fontSize:15,fontWeight:800,color:C.navy}}>₹{a.price_inr?.toLocaleString()}</span>}
-                  {a.price_usd != null && <span style={{fontSize:12,color:C.muted}}>${a.price_usd}</span>}
-                </div>
-                <div style={{fontSize:11,color:C.muted}}>+{a.quantity} {a.addon_type==="extra_events"?"event(s)":"contacts"}</div>
-                <button onClick={()=>{setEditing(a.addon_id);setEditForm(a);}}
-                  style={{position:"absolute",top:12,right:12,padding:"3px 9px",background:"none",color:C.muted,border:`1px solid ${C.border}`,borderRadius:5,fontSize:10,cursor:"pointer",fontFamily:F}}>
-                  Edit
-                </button>
+                <div style={{flex:1,height:1,background:C.border}}/>
               </div>
-            );
+              <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:10,overflow:"hidden"}}>
+                {/* Header */}
+                <div style={{display:"grid",gridTemplateColumns:"1fr 80px 140px 140px 90px",gap:0,padding:"9px 16px",background:"#F8FAFC",borderBottom:`1px solid ${C.border}`}}>
+                  {["Add-on","Qty","Price (₹ INR)","Price ($ USD)",""].map(h=>(
+                    <div key={h} style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.04em"}}>{h}</div>
+                  ))}
+                </div>
+                {items.map((a, i) => {
+                  const p = prices[a.addon_id] || {};
+                  const isDirty = String(p.price_inr) !== String(a.price_inr ?? "") || String(p.price_usd) !== String(a.price_usd ?? "");
+                  return (
+                    <div key={a.addon_id} style={{display:"grid",gridTemplateColumns:"1fr 80px 140px 140px 90px",gap:0,padding:"12px 16px",alignItems:"center",borderBottom: i < items.length-1 ? `1px solid ${C.border}` : "none",background:C.white}}>
+                      <div>
+                        <div style={{fontSize:13,fontWeight:600,color:C.navy}}>{a.label}</div>
+                        {a.description && <div style={{fontSize:11,color:C.muted,marginTop:1}}>{a.description}</div>}
+                      </div>
+                      <div style={{fontSize:13,fontWeight:700,color:C.dark}}>+{a.quantity}</div>
+                      <div style={{paddingRight:12}}>
+                        <input
+                          type="number"
+                          value={p.price_inr ?? ""}
+                          onChange={e => setPrices(ps => ({...ps, [a.addon_id]:{...ps[a.addon_id],price_inr:e.target.value}}))}
+                          style={{...iS,width:"100%",fontSize:12,padding:"6px 10px"}}
+                          placeholder="e.g. 2000"
+                        />
+                      </div>
+                      <div style={{paddingRight:12}}>
+                        <input
+                          type="number"
+                          value={p.price_usd ?? ""}
+                          onChange={e => setPrices(ps => ({...ps, [a.addon_id]:{...ps[a.addon_id],price_usd:e.target.value}}))}
+                          style={{...iS,width:"100%",fontSize:12,padding:"6px 10px"}}
+                          placeholder="e.g. 29"
+                        />
+                      </div>
+                      <div>
+                        <button
+                          onClick={() => handleSavePrice(a)}
+                          disabled={saving === a.addon_id || !isDirty}
+                          style={{padding:"6px 14px",background:isDirty?C.navy:"#E2E8F0",color:isDirty?C.white:C.muted,border:"none",borderRadius:6,fontSize:11,fontWeight:600,cursor:isDirty?"pointer":"default",fontFamily:F,whiteSpace:"nowrap"}}>
+                          {saving === a.addon_id ? "Saving…" : "Save"}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
         })}
       </div>
     </div>
@@ -704,6 +712,7 @@ function OrgAddonsSection({ orgId, events }) {
   const TYPE_COLORS = {
     extra_events:   { bg:"#EFF6FF", fg:"#1E3A8A" },
     extra_contacts: { bg:"#F0FDF4", fg:"#065F46" },
+    extra_deep_iei: { bg:"#FDF4FF", fg:"#6B21A8" },
   };
 
   return (
@@ -764,7 +773,7 @@ function OrgAddonsSection({ orgId, events }) {
                     <span style={{fontSize:9,padding:"2px 7px",borderRadius:99,background:tc.bg,color:tc.fg,fontWeight:700,textTransform:"uppercase"}}>{a.addon_type.replace(/_/g," ")}</span>
                     <div>
                       <p style={{fontSize:12,fontWeight:700,color:C.navy,margin:0}}>
-                        +{a.quantity} {a.addon_type === "extra_events" ? "event(s)" : "contacts"}
+                        +{a.quantity} {a.addon_type === "extra_events" ? "event(s)" : a.addon_type === "extra_deep_iei" ? "deep IEI analyses" : "contacts"}
                       </p>
                       {ev && <p style={{fontSize:11,color:C.muted,margin:"1px 0 0 0"}}>Event: {ev.name}</p>}
                       {a.notes && <p style={{fontSize:11,color:C.muted,margin:"1px 0 0 0"}}>{a.notes}</p>}
