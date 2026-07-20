@@ -824,8 +824,8 @@ function PlatformEmailScreen() {
   const save = async () => {
     setSaving(true); setSaved(false); setSaveError("");
     try {
-      const updated = await apiCall("/admin/platform-email-config", "PATCH", config);
-      setConfig(updated);
+      await apiCall("/admin/platform-email-config", "PATCH", config);
+      // Do NOT overwrite local config from API response — keep what the user has in the form
       setSaved(true);
       setTimeout(() => setSaved(false), 4000);
     } catch(e) {
