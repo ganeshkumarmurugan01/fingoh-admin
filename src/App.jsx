@@ -800,6 +800,161 @@ function OrgAddonsSection({ orgId, events }) {
   );
 }
 
+// ── Platform Email Config Screen ──────────────────────────────────────────────
+function PlatformEmailScreen() {
+  const [config, setConfig] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [saved,  setSaved]  = useState(false);
+  const [activeEmailTab, setActiveEmailTab] = useState("branding");
+
+  const iS = {width:"100%",background:"#F8FAFC",border:"1px solid #E2E8F0",borderRadius:8,padding:"9px 12px",fontSize:13,fontFamily:F,color:C.dark,outline:"none",boxSizing:"border-box"};
+  const lS = {display:"block",fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:".06em",marginBottom:5};
+
+  useEffect(()=>{
+    apiCall("/admin/platform-email-config").then(d => setConfig(d)).catch(console.error);
+  },[]);
+
+  const set = (k, v) => setConfig(p => ({...p, [k]: v}));
+  const setTemplate = (k, v) => setConfig(p => ({...p, templates: {...(p.templates||{}), [k]: v}}));
+
+  const save = async () => {
+    setSaving(true); setSaved(false);
+    try {
+      const updated = await apiCall("/admin/platform-email-config", "PATCH", config);
+      setConfig(updated);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch(e) { alert("Save failed: " + e.message); }
+    setSaving(false);
+  };
+
+  if (!config) return <div style={{padding:40,color:C.muted,textAlign:"center"}}>Loading…</div>;
+
+  const EMAIL_TABS = [
+    {id:"branding", label:"Branding & Sender"},
+    {id:"verification", label:"Verification Email"},
+    {id:"welcome", label:"Welcome Email"},
+  ];
+
+  const previewHtml = (bodyHtml) => {
+    const primary = config.primary_color || "#0D1B3E";
+    const logo    = config.logo_url ? `<img src="${config.logo_url}" style="max-height:44px;" alt="logo">` : `<span style="color:#fff;font-size:20px;font-weight:800;">${config.sender_name||"Fingoh"}</span>`;
+    const sigName  = config.signature_name || config.sender_name || "The Fingoh Team";
+    const sigTitle = config.signature_title ? `<p style="margin:2px 0;font-size:12px;color:#64748B;">${config.signature_title}</p>` : "";
+    const sigCo    = config.signature_company ? `<p style="margin:2px 0;font-size:12px;color:#64748B;">${config.signature_company}</p>` : "";
+    const footer   = config.footer_text || "Sent via Fingoh · Intent Intelligence for B2B Trade Fairs";
+    const rendered = bodyHtml
+      .replace(/{{name}}/g, "Jane Smith")
+      .replace(/{{company}}/g, "Acme Corp")
+      .replace(/{{verify_link}}/g, "#");
+    return `<!DOCTYPE html><html><body style="margin:0;padding:16px;background:#F8FAFC;font-family:-apple-system,sans-serif;">
+      <table width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
+      <table width="540" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:10px;border:1px solid #E2E8F0;overflow:hidden;max-width:540px;">
+      <tr><td style="background:${primary};padding:20px 28px;">${logo}</td></tr>
+      <tr><td style="padding:28px;color:#0F172A;font-size:14px;line-height:1.7;">${rendered}
+        <div style="margin-top:20px;padding-top:14px;border-top:1px solid #E2E8F0;">
+          <p style="margin:2px 0;font-size:13px;font-weight:700;color:${primary};">${sigName}</p>${sigTitle}${sigCo}
+        </div>
+      </td></tr>
+      <tr><td style="background:#F8FAFC;padding:12px 28px;border-top:1px solid #E2E8F0;text-align:center;">
+        <p style="margin:0;font-size:11px;color:#94A3B8;">${footer}</p>
+      </td></tr></table></td></tr></table></body></html>`;
+  };
+
+  const currentTemplate = activeEmailTab === "verification"
+    ? (config.templates?.signup_verification || "")
+    : (config.templates?.trial_welcome || "");
+  const currentKey = activeEmailTab === "verification" ? "signup_verification" : "trial_welcome";
+
+  return (
+    <div>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:24}}>
+        <div>
+          <h2 style={{fontSize:18,fontWeight:700,color:C.navy,margin:0}}>Platform Email Configuration</h2>
+          <p style={{fontSize:12,color:C.muted,margin:"4px 0 0"}}>Branding and templates for signup verification and welcome emails</p>
+        </div>
+        <button onClick={save} disabled={saving}
+          style={{padding:"9px 20px",background:saved?"#16A34A":C.blue,color:"#fff",border:"none",borderRadius:8,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:F}}>
+          {saving ? "Saving…" : saved ? "✓ Saved" : "Save changes"}
+        </button>
+      </div>
+
+      {/* Sub-tabs */}
+      <div style={{display:"flex",gap:4,marginBottom:24,borderBottom:"2px solid #E2E8F0",paddingBottom:0}}>
+        {EMAIL_TABS.map(t => (
+          <button key={t.id} onClick={() => setActiveEmailTab(t.id)}
+            style={{padding:"8px 16px",background:"none",border:"none",borderBottom:activeEmailTab===t.id?`2px solid ${C.blue}`:"2px solid transparent",color:activeEmailTab===t.id?C.blue:C.muted,fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:F,marginBottom:-2}}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {activeEmailTab === "branding" ? (
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
+          {[
+            ["sender_name",      "Sender Name",       "Fingoh"],
+            ["reply_to",         "Reply-To Email",    "hello@fingoh.ai"],
+            ["logo_url",         "Logo URL",          "https://…/logo.png"],
+            ["primary_color",    "Primary Colour",    "#0D1B3E"],
+            ["banner_url",       "Banner URL (opt)",  ""],
+            ["signature_name",   "Signature Name",    "The Fingoh Team"],
+            ["signature_title",  "Signature Title",   ""],
+            ["signature_company","Signature Company",  "Fingoh"],
+            ["signature_phone",  "Signature Phone",   ""],
+            ["signature_linkedin","LinkedIn URL",      ""],
+          ].map(([key, label, ph]) => (
+            <div key={key}>
+              <label style={lS}>{label}</label>
+              <input value={config[key] || ""} onChange={e => set(key, e.target.value)}
+                placeholder={ph} style={iS}/>
+            </div>
+          ))}
+          <div style={{gridColumn:"1/-1"}}>
+            <label style={lS}>Footer Text</label>
+            <input value={config.footer_text || ""} onChange={e => set("footer_text", e.target.value)}
+              placeholder="Sent via Fingoh · …" style={iS}/>
+          </div>
+          {/* Colour preview */}
+          {config.primary_color && (
+            <div style={{gridColumn:"1/-1",marginTop:4}}>
+              <div style={{height:8,borderRadius:4,background:config.primary_color,width:120,display:"inline-block"}}/>
+              <span style={{fontSize:11,color:C.muted,marginLeft:10}}>{config.primary_color}</span>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
+          <div>
+            <label style={lS}>
+              {activeEmailTab === "verification" ? "Verification Email Body HTML" : "Welcome Email Body HTML"}
+            </label>
+            <p style={{fontSize:11,color:C.muted,margin:"0 0 8px"}}>
+              Variables: <code style={{background:"#F1F5F9",padding:"1px 5px",borderRadius:4}}>{"{{name}}"}</code>{" "}
+              <code style={{background:"#F1F5F9",padding:"1px 5px",borderRadius:4}}>{"{{company}}"}</code>{" "}
+              {activeEmailTab === "verification" && <code style={{background:"#F1F5F9",padding:"1px 5px",borderRadius:4}}>{"{{verify_link}}"}</code>}
+            </p>
+            <textarea
+              value={currentTemplate}
+              onChange={e => setTemplate(currentKey, e.target.value)}
+              rows={22}
+              style={{...iS, fontFamily:"monospace", fontSize:12, resize:"vertical"}}
+            />
+          </div>
+          <div>
+            <label style={lS}>Live Preview</label>
+            <iframe
+              srcDoc={previewHtml(currentTemplate)}
+              style={{width:"100%",height:520,border:"1px solid #E2E8F0",borderRadius:8,background:"#fff"}}
+              title="email-preview"
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 function CustomerDetail({ orgId, onBack, planConfigs }) {
   const [org, setOrg]         = useState(null);
   const [loading, setLoading] = useState(true);
@@ -1215,6 +1370,7 @@ export default function App() {
   const TABS = [
     { id:"customers", label:"Customers" },
     { id:"plans",     label:"Plans & Packages" },
+    { id:"emails",    label:"Platform Emails" },
   ];
 
   return (
@@ -1247,6 +1403,8 @@ export default function App() {
       <div style={{padding:"28px 32px",maxWidth:1200,margin:"0 auto"}}>
         {selOrg ? (
           <CustomerDetail orgId={selOrg.id} onBack={()=>setSelOrg(null)} planConfigs={planConfigs}/>
+        ) : activeTab === "emails" ? (
+          <PlatformEmailScreen/>
         ) : activeTab === "plans" ? (
           <PlansConfigScreen/>
         ) : (
