@@ -12,15 +12,19 @@ const C   = {
 
 // ── Plan meta ─────────────────────────────────────────────────────────────────
 const PLAN_COLORS = {
-  trial:              {bg:"#F1F5F9", fg:"#475569"},
-  single_event:       {bg:"#EFF6FF", fg:"#1E3A8A"},
-  event_bundle:       {bg:"#ECFDF5", fg:"#065F46"},
-  event_portfolio:    {bg:"#F0FDF4", fg:"#14532D"},
-  annual_self_serve:  {bg:"#F5F3FF", fg:"#5B21B6"},
-  annual_enterprise:  {bg:"#FFF7ED", fg:"#9A3412"},
-  starter:    {bg:"#EFF6FF", fg:"#1E3A8A"},
-  pro:        {bg:"#F0FDF4", fg:"#14532D"},
-  enterprise: {bg:"#F5F3FF", fg:"#581C87"},
+  // Current plans
+  trial:   {bg:"#F1F5F9", fg:"#475569"},
+  starter: {bg:"#EFF6FF", fg:"#1D4ED8"},
+  growth:  {bg:"#ECFDF5", fg:"#065F46"},
+  scale:   {bg:"#F5F3FF", fg:"#5B21B6"},
+  // Legacy
+  single_event:      {bg:"#EFF6FF", fg:"#1E3A8A"},
+  event_bundle:      {bg:"#ECFDF5", fg:"#065F46"},
+  event_portfolio:   {bg:"#F0FDF4", fg:"#14532D"},
+  annual_self_serve: {bg:"#F5F3FF", fg:"#5B21B6"},
+  annual_enterprise: {bg:"#FFF7ED", fg:"#9A3412"},
+  pro:               {bg:"#F0FDF4", fg:"#14532D"},
+  enterprise:        {bg:"#F5F3FF", fg:"#581C87"},
 };
 const STATUS_COLORS = {
   active:    {bg:"#F0FDF4", fg:"#16A34A"},
@@ -420,7 +424,7 @@ function PlansConfigScreen() {
       </div>
 
       <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:16}}>
-        {configs.filter(c => c.is_active && c.plan_id !== "event_portfolio").map(cfg => (
+        {configs.filter(c => c.is_active && ["trial","starter","growth","scale"].includes(c.plan_id)).map(cfg => (
           <div key={cfg.plan_id}>
             {editing === cfg.plan_id ? (
               <div style={{background:C.white,border:`2px solid ${C.blue}`,borderRadius:12,padding:"20px 22px"}}>
@@ -517,7 +521,7 @@ function StatCard({ val, label, color }) {
 function CreateCustomerModal({ onClose, onCreated, planConfigs }) {
   const [form, setForm] = useState({
     company_name:"", slug:"", admin_email:"", admin_name:"",
-    plan:"single_event", max_events:1, admin_notes:"", subscription_expires_at:""
+    plan:"trial", max_events:1, admin_notes:"", subscription_expires_at:""
   });
   const [loading, setLoading] = useState(false);
   const [result, setResult]   = useState(null);
@@ -585,7 +589,7 @@ function CreateCustomerModal({ onClose, onCreated, planConfigs }) {
             <div>
               <label style={lS}>Plan</label>
               <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:10}}>
-                {planConfigs.filter(p=>p.is_active && !["starter","pro","enterprise"].includes(p.plan_id)).map(cfg => {
+                {planConfigs.filter(p=>p.is_active && ["trial","starter","growth","scale"].includes(p.plan_id)).map(cfg => {
                   const pc = PLAN_COLORS[cfg.plan_id] || PLAN_COLORS.trial;
                   const active = form.plan === cfg.plan_id;
                   return (
@@ -876,7 +880,7 @@ function CustomerDetail({ orgId, onBack, planConfigs }) {
               <div>
                 <label style={lS}>Plan</label>
                 <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
-                  {planConfigs.filter(p=>p.is_active && p.plan_id !== "event_portfolio").map(cfg => {
+                  {planConfigs.filter(p=>p.is_active && ["trial","starter","growth","scale"].includes(p.plan_id)).map(cfg => {
                     const pcc = PLAN_COLORS[cfg.plan_id] || PLAN_COLORS.trial;
                     const active = form.plan === cfg.plan_id;
                     return (
@@ -1319,7 +1323,7 @@ export default function App() {
               <div style={{marginTop:16}}>
                 <h3 style={{fontSize:12,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:.06,margin:"0 0 10px 0"}}>Plan distribution</h3>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:10}}>
-                  {planConfigs.filter(p=>p.is_active && !["starter","pro","enterprise"].includes(p.plan_id)).map(p=>{
+                  {planConfigs.filter(p=>["trial","starter","growth","scale"].includes(p.plan_id)).map(p=>{
                     const count = stats.plans?.[p.plan_id]||0;
                     const pc = PLAN_COLORS[p.plan_id]||PLAN_COLORS.trial;
                     return (
