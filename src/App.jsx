@@ -824,7 +824,7 @@ function PlatformEmailScreen() {
   const save = async () => {
     setSaving(true); setSaved(false); setSaveError("");
     try {
-      await apiCall("/admin/platform-email-config", "PATCH", config);
+      await apiCall("/admin/platform-email-config", { method:"PATCH", body:JSON.stringify(config) });
       // Do NOT overwrite local config from API response — keep what the user has in the form
       setSaved(true);
       setTimeout(() => setSaved(false), 4000);
@@ -845,7 +845,7 @@ function PlatformEmailScreen() {
   const sendTest = async (templateKey) => {
     setSendingTest(true); setTestMsg("");
     try {
-      await apiCall("/admin/platform-email-config/send-test", "POST", { template_key: templateKey });
+      await apiCall("/admin/platform-email-config/send-test", { method:"POST", body:JSON.stringify({ template_key: templateKey }) });
       setTestMsg("✓ Test email sent to your inbox");
     } catch(e) { setTestMsg("✗ " + (e.message || "Send failed")); }
     setSendingTest(false);
