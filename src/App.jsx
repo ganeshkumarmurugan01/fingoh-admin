@@ -819,14 +819,18 @@ function PlatformEmailScreen() {
   const set = (k, v) => setConfig(p => ({...p, [k]: v}));
   const setTemplate = (k, v) => setConfig(p => ({...p, templates: {...(p.templates||{}), [k]: v}}));
 
+  const [saveError, setSaveError] = useState("");
+
   const save = async () => {
-    setSaving(true); setSaved(false);
+    setSaving(true); setSaved(false); setSaveError("");
     try {
       const updated = await apiCall("/admin/platform-email-config", "PATCH", config);
       setConfig(updated);
       setSaved(true);
-      setTimeout(() => setSaved(false), 3000);
-    } catch(e) { alert("Save failed: " + e.message); }
+      setTimeout(() => setSaved(false), 4000);
+    } catch(e) {
+      setSaveError(e.message || "Save failed — check Railway logs");
+    }
     setSaving(false);
   };
 
@@ -893,10 +897,13 @@ function PlatformEmailScreen() {
           <h2 style={{fontSize:18,fontWeight:700,color:C.navy,margin:0}}>Platform Email Configuration</h2>
           <p style={{fontSize:12,color:C.muted,margin:"4px 0 0"}}>Branding and templates for signup verification and welcome emails</p>
         </div>
-        <button onClick={save} disabled={saving}
-          style={{padding:"9px 20px",background:saved?"#16A34A":C.blue,color:"#fff",border:"none",borderRadius:8,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:F}}>
-          {saving ? "Saving…" : saved ? "✓ Saved" : "Save changes"}
-        </button>
+        <div style={{display:"flex",alignItems:"center",gap:12}}>
+          {saveError && <span style={{fontSize:12,color:C.red,fontWeight:600}}>{saveError}</span>}
+          <button onClick={save} disabled={saving}
+            style={{padding:"9px 20px",background:saved?"#16A34A":saveError?C.red:C.blue,color:"#fff",border:"none",borderRadius:8,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:F}}>
+            {saving ? "Saving…" : saved ? "✓ Saved" : "Save changes"}
+          </button>
+        </div>
       </div>
 
       {/* Sub-tabs */}
