@@ -538,6 +538,9 @@ function CreateCustomerModal({ onClose, onCreated, planConfigs }) {
     if (!form.company_name||!form.slug||!form.admin_email||!form.admin_name) {
       setError("Please fill all required fields"); return;
     }
+    if (!form.subscription_expires_at) {
+      setError("Expiry date is required"); return;
+    }
     setLoading(true); setError("");
     try {
       const data = await apiCall("/admin/customers", {
