@@ -538,6 +538,9 @@ function CreateCustomerModal({ onClose, onCreated, planConfigs }) {
     if (!form.company_name||!form.slug||!form.admin_email||!form.admin_name) {
       setError("Please fill all required fields"); return;
     }
+    if (!form.subscription_expires_at) {
+      setError("Expiry date is required"); return;
+    }
     setLoading(true); setError("");
     try {
       const data = await apiCall("/admin/customers", {
@@ -1092,6 +1095,10 @@ function CustomerDetail({ orgId, onBack, planConfigs }) {
   useEffect(() => { reload(); }, [reload]);
 
   const handleSave = async () => {
+    if (!form.subscription_expires_at) {
+      alert("Expiry date is required before saving.");
+      return;
+    }
     setSaving(true);
     try {
       await apiCall(`/admin/customers/${orgId}`, { method:"PATCH", body:JSON.stringify(form) });
@@ -1170,7 +1177,7 @@ function CustomerDetail({ orgId, onBack, planConfigs }) {
                 </div>
                 <div><label style={lS}>Max Events</label><input type="number" value={form.max_events} onChange={e=>setForm(p=>({...p,max_events:parseInt(e.target.value)}))} style={iS}/></div>
               </div>
-              <div><label style={lS}>Expires</label><input type="date" value={form.subscription_expires_at} onChange={e=>setForm(p=>({...p,subscription_expires_at:e.target.value}))} style={iS}/></div>
+              <div><label style={lS}>Expires *</label><input type="date" value={form.subscription_expires_at} onChange={e=>setForm(p=>({...p,subscription_expires_at:e.target.value}))} style={{...iS, borderColor: !form.subscription_expires_at ? "#DC2626" : "#E2E8F0"}}/>{!form.subscription_expires_at && <p style={{color:"#DC2626",fontSize:11,margin:"3px 0 0"}}>Expiry date is required</p>}</div>
               <div><label style={lS}>Admin Notes</label><textarea value={form.admin_notes} onChange={e=>setForm(p=>({...p,admin_notes:e.target.value}))} rows={2} style={{...iS,resize:"vertical"}}/></div>
             </div>
           ) : (
