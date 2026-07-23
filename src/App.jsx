@@ -139,7 +139,7 @@ function PlanFeatureCard({ config, compact = false }) {
         </div>
         <div style={{display:"flex",gap:10,fontSize:10,color:C.muted,flexWrap:"wrap"}}>
           <span>📅 {config.max_events >= 999 ? "Unlimited events" : `${config.max_events} event${config.max_events>1?"s":""}`}</span>
-          <span>👤 {config.max_contacts_per_event >= 9999 ? "Unlimited" : (config.max_contacts_per_event||0).toLocaleString()} contacts/ev</span>
+          <span>👤 {config.max_contacts_per_event >= 99999 ? "Unlimited" : (config.max_contacts_per_event||0).toLocaleString()} contacts/ev</span>
           <span style={{color:C.purple}}>⚡ {config.max_deep_iei_per_event >= 9999 ? "Unlimited" : config.max_deep_iei_per_event} deep IEI/ev</span>
           <span>🎧 {SUPPORT_LABELS[config.support_level] || config.support_level}</span>
         </div>
@@ -170,7 +170,7 @@ function PlanFeatureCard({ config, compact = false }) {
           <div style={{fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:.05}}>Events</div>
         </div>
         <div style={{textAlign:"center"}}>
-          <div style={{fontSize:15,fontWeight:800,color:C.navy}}>{config.max_contacts_per_event >= 9999 ? "∞" : (config.max_contacts_per_event||"—").toLocaleString()}</div>
+          <div style={{fontSize:15,fontWeight:800,color:C.navy}}>{config.max_contacts_per_event >= 99999 ? "∞" : (config.max_contacts_per_event||"—").toLocaleString()}</div>
           <div style={{fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:.05}}>Contacts/ev</div>
         </div>
         <div style={{textAlign:"center"}}>
