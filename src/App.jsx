@@ -1380,7 +1380,7 @@ function CustomerRow({ org, onSelect, onStatusChange, onResetPassword }) {
         <p style={{fontSize:13,fontWeight:600,color:C.navy,margin:0}}>{org.name}</p>
         <p style={{fontSize:11,color:C.muted,margin:0}}>{org.slug}</p>
       </div>
-      <div style={{fontSize:12,color:C.dark}}>{org.users?.[0]?.name || "—"}</div>
+      <div><div style={{fontSize:12,color:C.dark}}>{org.users?.[0]?.name || "—"}</div><div style={{fontSize:11,color:C.muted}}>{org.users?.[0]?.email || ""}</div></div>
       <div>
         <span style={{fontSize:10,padding:"3px 8px",borderRadius:99,background:pc.bg,color:pc.fg,fontWeight:700}}>{org.plan?.replace(/_/g," ")}</span>
       </div>
