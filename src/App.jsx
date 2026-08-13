@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
+import CreateOrganiser from "./CreateOrganiser.jsx";
 import { supabase } from "./lib/supabase.js";
 
 const API = import.meta.env.VITE_API_URL;
+const [organiserView, setOrganiserView] = useState("list"); // "list" | "create"
 const F   = "'Inter', -apple-system, sans-serif";
 const C   = {
   navy:"#0D1B3E", blue:"#2563EB", green:"#16A34A", red:"#DC2626",
@@ -1410,6 +1412,26 @@ function CustomerRow({ org, onSelect, onStatusChange, onResetPassword }) {
     </div>
   );
 }
+function OrganiserListScreen({ onCreateNew }) {
+  return (
+    <div>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:24 }}>
+        <div>
+          <h2 style={{ fontSize:18, fontWeight:700, color:C.navy, margin:0 }}>Organisers</h2>
+          <p style={{ fontSize:12, color:C.muted, margin:"4px 0 0" }}>Manage organiser accounts and their quotas</p>
+        </div>
+        <button onClick={onCreateNew}
+          style={{ padding:"8px 18px", background:C.navy, color:C.white, border:"none", borderRadius:8, fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:F }}>
+          + New Organiser
+        </button>
+      </div>
+      <div style={{ background:C.white, border:`1px solid ${C.border}`, borderRadius:12, padding:40, textAlign:"center", color:C.muted, fontSize:13 }}>
+        No organisers yet — create your first one
+      </div>
+    </div>
+  );
+}
+
 
 // ── Main App ──────────────────────────────────────────────────────────────────
 export default function App() {
@@ -1484,10 +1506,11 @@ export default function App() {
   if (!user)   return <LoginScreen onLogin={setUser}/>;
 
   const TABS = [
-    { id:"customers", label:"Customers" },
-    { id:"plans",     label:"Plans & Packages" },
-    { id:"emails",    label:"Platform Emails" },
-  ];
+  { id:"customers",   label:"Customers" },
+  { id:"organisers",  label:"Organisers" },
+  { id:"plans",       label:"Plans & Packages" },
+  { id:"emails",      label:"Platform Emails" },
+];
 
   return (
     <div style={{minHeight:"100vh",background:C.light,fontFamily:F}}>
@@ -1520,8 +1543,14 @@ export default function App() {
         {selOrg ? (
           <CustomerDetail orgId={selOrg.id} onBack={()=>setSelOrg(null)} planConfigs={planConfigs}/>
         ) : activeTab === "emails" ? (
-          <PlatformEmailScreen/>
-        ) : activeTab === "plans" ? (
+  <PlatformEmailScreen/>
+) : activeTab === "organisers" ? (
+  organiserView === "create" ? (
+    <CreateOrganiser onBack={() => setOrganiserView("list")} />
+  ) : (
+    <OrganiserListScreen onCreateNew={() => setOrganiserView("create")} />
+  )
+) : activeTab === "plans" ? (
           <PlansConfigScreen/>
         ) : (
           <>
