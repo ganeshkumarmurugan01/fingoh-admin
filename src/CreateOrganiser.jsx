@@ -34,13 +34,12 @@ export default function CreateOrganiser({ onBack, apiCall }) {
     setLoading(true); setError(null);
     try {
       const ADMIN_KEY = import.meta.env.VITE_ADMIN_INTERNAL_KEY;
-      const API       = import.meta.env.VITE_API_URL;
-      const res = await fetch(`${API}/organiser/admin/create-organiser`, {
+      const res = await fetch(`/api/v1/organiser/admin/create-organiser`, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
-          "x-fingoh-admin-key": ADMIN_KEY,
-        },
+    "Content-Type": "application/json",
+    "x-fingoh-admin-key": ADMIN_KEY,
+  },
         body: JSON.stringify({
           ...form,
           exhibitor_quota: parseInt(form.exhibitor_quota) || 10,

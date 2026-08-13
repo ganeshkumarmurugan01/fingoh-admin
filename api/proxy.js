@@ -7,7 +7,8 @@ export default async function handler(req, res) {
   const target = backendUrl + path + (qString ? '?' + qString : '')
 
     const auth = req.headers['authorization'] || req.headers['x-fingoh-auth'] || ''
-    const headers = { 'content-type': 'application/json', 'x-fingoh-auth': auth }
+    const adminKey = req.headers['x-fingoh-admin-key'] || ''
+    const headers = { 'content-type': 'application/json', 'x-fingoh-auth': auth,'x-fingoh-admin-key': adminKey }
     const body = ['GET', 'HEAD'].includes(req.method) ? undefined : JSON.stringify(req.body ?? {})
 
     const upstream = await fetch(target, { method: req.method, headers, body, redirect: 'manual' })
