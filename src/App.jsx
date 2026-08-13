@@ -3,7 +3,7 @@ import CreateOrganiser from "./CreateOrganiser.jsx";
 import { supabase } from "./lib/supabase.js";
 
 const API = import.meta.env.VITE_API_URL;
-const [organiserView, setOrganiserView] = useState("list"); // "list" | "create"
+
 const F   = "'Inter', -apple-system, sans-serif";
 const C   = {
   navy:"#0D1B3E", blue:"#2563EB", green:"#16A34A", red:"#DC2626",
@@ -1446,6 +1446,7 @@ export default function App() {
   const [activeTab, setActiveTab]     = useState("customers");
   const [planConfigs, setPlanConfigs] = useState([]);
   const [search, setSearch]           = useState("");
+  const [organiserView, setOrganiserView] = useState("list"); // "list" | "create"
 
   useEffect(()=>{
     supabase.auth.getSession().then(({data:{session}})=>{
