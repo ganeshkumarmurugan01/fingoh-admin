@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
+import CreateOrganiser from "./CreateOrganiser.jsx";
 import { supabase } from "./lib/supabase.js";
 
 const API = import.meta.env.VITE_API_URL;
+
 const F   = "'Inter', -apple-system, sans-serif";
 const C   = {
   navy:"#0D1B3E", blue:"#2563EB", green:"#16A34A", red:"#DC2626",
@@ -139,7 +141,7 @@ function PlanFeatureCard({ config, compact = false }) {
         </div>
         <div style={{display:"flex",gap:10,fontSize:10,color:C.muted,flexWrap:"wrap"}}>
           <span>📅 {config.max_events >= 999 ? "Unlimited events" : `${config.max_events} event${config.max_events>1?"s":""}`}</span>
-          <span>👤 {config.max_contacts_per_event >= 9999 ? "Unlimited" : (config.max_contacts_per_event||0).toLocaleString()} contacts/ev</span>
+          <span>👤 {config.max_contacts_per_event >= 99999 ? "Unlimited" : (config.max_contacts_per_event||0).toLocaleString()} contacts/ev</span>
           <span style={{color:C.purple}}>⚡ {config.max_deep_iei_per_event >= 9999 ? "Unlimited" : config.max_deep_iei_per_event} deep IEI/ev</span>
           <span>🎧 {SUPPORT_LABELS[config.support_level] || config.support_level}</span>
         </div>
@@ -170,7 +172,7 @@ function PlanFeatureCard({ config, compact = false }) {
           <div style={{fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:.05}}>Events</div>
         </div>
         <div style={{textAlign:"center"}}>
-          <div style={{fontSize:15,fontWeight:800,color:C.navy}}>{config.max_contacts_per_event >= 9999 ? "∞" : (config.max_contacts_per_event||"—").toLocaleString()}</div>
+          <div style={{fontSize:15,fontWeight:800,color:C.navy}}>{config.max_contacts_per_event >= 99999 ? "∞" : (config.max_contacts_per_event||"—").toLocaleString()}</div>
           <div style={{fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:.05}}>Contacts/ev</div>
         </div>
         <div style={{textAlign:"center"}}>
@@ -537,6 +539,9 @@ function CreateCustomerModal({ onClose, onCreated, planConfigs }) {
   const handleSubmit = async () => {
     if (!form.company_name||!form.slug||!form.admin_email||!form.admin_name) {
       setError("Please fill all required fields"); return;
+    }
+    if (!form.subscription_expires_at) {
+      setError("Expiry date is required"); return;
     }
     setLoading(true); setError("");
     try {
@@ -1092,6 +1097,10 @@ function CustomerDetail({ orgId, onBack, planConfigs }) {
   useEffect(() => { reload(); }, [reload]);
 
   const handleSave = async () => {
+    if (!form.subscription_expires_at) {
+      alert("Expiry date is required before saving.");
+      return;
+    }
     setSaving(true);
     try {
       await apiCall(`/admin/customers/${orgId}`, { method:"PATCH", body:JSON.stringify(form) });
@@ -1170,7 +1179,7 @@ function CustomerDetail({ orgId, onBack, planConfigs }) {
                 </div>
                 <div><label style={lS}>Max Events</label><input type="number" value={form.max_events} onChange={e=>setForm(p=>({...p,max_events:parseInt(e.target.value)}))} style={iS}/></div>
               </div>
-              <div><label style={lS}>Expires</label><input type="date" value={form.subscription_expires_at} onChange={e=>setForm(p=>({...p,subscription_expires_at:e.target.value}))} style={iS}/></div>
+              <div><label style={lS}>Expires *</label><input type="date" value={form.subscription_expires_at} onChange={e=>setForm(p=>({...p,subscription_expires_at:e.target.value}))} style={{...iS, borderColor: !form.subscription_expires_at ? "#DC2626" : "#E2E8F0"}}/>{!form.subscription_expires_at && <p style={{color:"#DC2626",fontSize:11,margin:"3px 0 0"}}>Expiry date is required</p>}</div>
               <div><label style={lS}>Admin Notes</label><textarea value={form.admin_notes} onChange={e=>setForm(p=>({...p,admin_notes:e.target.value}))} rows={2} style={{...iS,resize:"vertical"}}/></div>
             </div>
           ) : (
@@ -1373,7 +1382,7 @@ function CustomerRow({ org, onSelect, onStatusChange, onResetPassword }) {
         <p style={{fontSize:13,fontWeight:600,color:C.navy,margin:0}}>{org.name}</p>
         <p style={{fontSize:11,color:C.muted,margin:0}}>{org.slug}</p>
       </div>
-      <div style={{fontSize:12,color:C.dark}}>{org.users?.[0]?.name || "—"}</div>
+      <div><div style={{fontSize:12,color:C.dark}}>{org.users?.[0]?.name || "—"}</div><div style={{fontSize:11,color:C.muted}}>{org.users?.[0]?.email || ""}</div></div>
       <div>
         <span style={{fontSize:10,padding:"3px 8px",borderRadius:99,background:pc.bg,color:pc.fg,fontWeight:700}}>{org.plan?.replace(/_/g," ")}</span>
       </div>
@@ -1403,6 +1412,71 @@ function CustomerRow({ org, onSelect, onStatusChange, onResetPassword }) {
     </div>
   );
 }
+function OrganiserListScreen({ onCreateNew }) {
+  const [organisers, setOrganisers] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    const key = import.meta.env.VITE_ADMIN_INTERNAL_KEY || "";
+    fetch("/api/proxy?slug=v1/organiser/admin/list-organisers", {
+      headers: { "x-fingoh-admin-key": key }
+    }).then(r => r.json()).then(d => {
+      setOrganisers(Array.isArray(d) ? d : []);
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, []);
+
+  return (
+    <div>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:24 }}>
+        <div>
+          <h2 style={{ fontSize:18, fontWeight:700, color:C.navy, margin:0 }}>Organisers</h2>
+          <p style={{ fontSize:12, color:C.muted, margin:"4px 0 0" }}>Manage organiser accounts and their quotas</p>
+        </div>
+        <button onClick={onCreateNew}
+          style={{ padding:"8px 18px", background:C.navy, color:C.white, border:"none", borderRadius:8, fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:F }}>
+          + New Organiser
+        </button>
+      </div>
+      {loading ? (
+        <div style={{ textAlign:"center", padding:40, color:C.muted }}>Loading...</div>
+      ) : organisers.length === 0 ? (
+        <div style={{ background:C.white, border:`1px solid ${C.border}`, borderRadius:12, padding:40, textAlign:"center", color:C.muted, fontSize:13 }}>
+          No organisers yet — create your first one
+        </div>
+      ) : (
+        <div style={{ background:C.white, border:`1px solid ${C.border}`, borderRadius:12, overflow:"hidden" }}>
+          <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
+            <thead>
+              <tr style={{ background:"#F8FAFC" }}>
+                {["Organisation","Contact Email","Exhibitors","Data Quota","Status","Created"].map(h => (
+                  <th key={h} style={{ padding:"10px 16px", textAlign:"left", fontSize:11, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:.04, borderBottom:`1px solid ${C.border}` }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {organisers.map((org, i) => (
+                <tr key={org.id} style={{ borderBottom:`1px solid ${C.border}`, background: i%2===0 ? C.white : "#FAFAFA" }}>
+                  <td style={{ padding:"12px 16px", fontWeight:700, color:C.navy }}>{org.name}</td>
+                  <td style={{ padding:"12px 16px", color:C.muted }}>{org.contact_email}</td>
+                  <td style={{ padding:"12px 16px", color:C.muted }}>{org.exhibitor_used}/{org.exhibitor_quota}</td>
+                  <td style={{ padding:"12px 16px", color:C.muted }}>{org.data_used}/{org.data_quota} rows</td>
+                  <td style={{ padding:"12px 16px" }}>
+                    <span style={{ padding:"3px 10px", borderRadius:99, fontSize:11, fontWeight:700, background: org.status==="active"?"#DCFCE7":"#F1F5F9", color: org.status==="active"?"#15803D":"#475569" }}>
+                      {org.status||"active"}
+                    </span>
+                  </td>
+                  <td style={{ padding:"12px 16px", color:C.muted, fontSize:11 }}>{new Date(org.created_at).toLocaleDateString()}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 // ── Main App ──────────────────────────────────────────────────────────────────
 export default function App() {
@@ -1417,6 +1491,7 @@ export default function App() {
   const [activeTab, setActiveTab]     = useState("customers");
   const [planConfigs, setPlanConfigs] = useState([]);
   const [search, setSearch]           = useState("");
+  const [organiserView, setOrganiserView] = useState("list"); // "list" | "create"
 
   useEffect(()=>{
     supabase.auth.getSession().then(({data:{session}})=>{
@@ -1477,10 +1552,11 @@ export default function App() {
   if (!user)   return <LoginScreen onLogin={setUser}/>;
 
   const TABS = [
-    { id:"customers", label:"Customers" },
-    { id:"plans",     label:"Plans & Packages" },
-    { id:"emails",    label:"Platform Emails" },
-  ];
+  { id:"customers",   label:"Customers" },
+  { id:"organisers",  label:"Organisers" },
+  { id:"plans",       label:"Plans & Packages" },
+  { id:"emails",      label:"Platform Emails" },
+];
 
   return (
     <div style={{minHeight:"100vh",background:C.light,fontFamily:F}}>
@@ -1513,8 +1589,14 @@ export default function App() {
         {selOrg ? (
           <CustomerDetail orgId={selOrg.id} onBack={()=>setSelOrg(null)} planConfigs={planConfigs}/>
         ) : activeTab === "emails" ? (
-          <PlatformEmailScreen/>
-        ) : activeTab === "plans" ? (
+  <PlatformEmailScreen/>
+) : activeTab === "organisers" ? (
+  organiserView === "create" ? (
+    <CreateOrganiser onBack={() => setOrganiserView("list")} />
+  ) : (
+    <OrganiserListScreen onCreateNew={() => setOrganiserView("create")} />
+  )
+) : activeTab === "plans" ? (
           <PlansConfigScreen/>
         ) : (
           <>
