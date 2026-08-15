@@ -1413,10 +1413,10 @@ function CustomerRow({ org, onSelect, onStatusChange, onResetPassword }) {
   );
 }
 function OrganiserListScreen({ onCreateNew }) {
-  const [organisers, setOrganisers] = React.useState([]);
-  const [loading, setLoading] = React.useState(true);
+  const [organisers, setOrganisers] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  React.useEffect(() => {
+  useEffect(() => {
     const key = import.meta.env.VITE_ADMIN_INTERNAL_KEY || "";
     fetch("/api/proxy?slug=v1/organiser/admin/list-organisers", {
       headers: { "x-fingoh-admin-key": key }
