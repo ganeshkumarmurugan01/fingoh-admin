@@ -3,10 +3,12 @@ export default async function handler(req, res) {
     const { slug, ...restQuery } = req.query
     const path = '/api/' + (Array.isArray(slug) ? slug.join('/') : slug || '')
     const qString = new URLSearchParams(restQuery).toString()
-    const target = 'https://web-production-93e78d.up.railway.app' + path + (qString ? '?' + qString : '')
+   const backendUrl = process.env.BACKEND_URL || 'https://web-production-93e78d.up.railway.app'
+  const target = backendUrl + path + (qString ? '?' + qString : '')
 
     const auth = req.headers['authorization'] || req.headers['x-fingoh-auth'] || ''
-    const headers = { 'content-type': 'application/json', 'x-fingoh-auth': auth }
+    const adminKey = req.headers['x-fingoh-admin-key'] || ''
+    const headers = { 'content-type': 'application/json', 'x-fingoh-auth': auth,'x-fingoh-admin-key': adminKey }
     const body = ['GET', 'HEAD'].includes(req.method) ? undefined : JSON.stringify(req.body ?? {})
 
     const upstream = await fetch(target, { method: req.method, headers, body, redirect: 'manual' })
