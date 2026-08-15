@@ -1413,6 +1413,19 @@ function CustomerRow({ org, onSelect, onStatusChange, onResetPassword }) {
   );
 }
 function OrganiserListScreen({ onCreateNew }) {
+  const [organisers, setOrganisers] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    const key = import.meta.env.VITE_ADMIN_INTERNAL_KEY || "";
+    fetch("/api/proxy?slug=v1/organiser/admin/list-organisers", {
+      headers: { "x-fingoh-admin-key": key }
+    }).then(r => r.json()).then(d => {
+      setOrganisers(Array.isArray(d) ? d : []);
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, []);
+
   return (
     <div>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:24 }}>
@@ -1425,9 +1438,41 @@ function OrganiserListScreen({ onCreateNew }) {
           + New Organiser
         </button>
       </div>
-      <div style={{ background:C.white, border:`1px solid ${C.border}`, borderRadius:12, padding:40, textAlign:"center", color:C.muted, fontSize:13 }}>
-        No organisers yet — create your first one
-      </div>
+      {loading ? (
+        <div style={{ textAlign:"center", padding:40, color:C.muted }}>Loading...</div>
+      ) : organisers.length === 0 ? (
+        <div style={{ background:C.white, border:`1px solid ${C.border}`, borderRadius:12, padding:40, textAlign:"center", color:C.muted, fontSize:13 }}>
+          No organisers yet — create your first one
+        </div>
+      ) : (
+        <div style={{ background:C.white, border:`1px solid ${C.border}`, borderRadius:12, overflow:"hidden" }}>
+          <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
+            <thead>
+              <tr style={{ background:"#F8FAFC" }}>
+                {["Organisation","Contact Email","Exhibitors","Data Quota","Status","Created"].map(h => (
+                  <th key={h} style={{ padding:"10px 16px", textAlign:"left", fontSize:11, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:.04, borderBottom:`1px solid ${C.border}` }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {organisers.map((org, i) => (
+                <tr key={org.id} style={{ borderBottom:`1px solid ${C.border}`, background: i%2===0 ? C.white : "#FAFAFA" }}>
+                  <td style={{ padding:"12px 16px", fontWeight:700, color:C.navy }}>{org.name}</td>
+                  <td style={{ padding:"12px 16px", color:C.muted }}>{org.contact_email}</td>
+                  <td style={{ padding:"12px 16px", color:C.muted }}>{org.exhibitor_used}/{org.exhibitor_quota}</td>
+                  <td style={{ padding:"12px 16px", color:C.muted }}>{org.data_used}/{org.data_quota} rows</td>
+                  <td style={{ padding:"12px 16px" }}>
+                    <span style={{ padding:"3px 10px", borderRadius:99, fontSize:11, fontWeight:700, background: org.status==="active"?"#DCFCE7":"#F1F5F9", color: org.status==="active"?"#15803D":"#475569" }}>
+                      {org.status||"active"}
+                    </span>
+                  </td>
+                  <td style={{ padding:"12px 16px", color:C.muted, fontSize:11 }}>{new Date(org.created_at).toLocaleDateString()}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
