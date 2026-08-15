@@ -1421,9 +1421,10 @@ function OrganiserListScreen({ onCreateNew }) {
     fetch("/api/proxy?slug=v1/organiser/admin/list-organisers", {
       headers: { "x-fingoh-admin-key": key }
     }).then(r => r.json()).then(d => {
+      console.log("[organiser list]", d);
       setOrganisers(Array.isArray(d) ? d : []);
       setLoading(false);
-    }).catch(() => setLoading(false));
+    }).catch((e) => { console.error("[organiser list error]", e); setLoading(false); });
   }, []);
 
   return (
